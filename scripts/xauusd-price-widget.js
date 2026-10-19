@@ -1,42 +1,60 @@
-// Widget Harga XAU/USD - Membaca dari GitHub Actions (data/market.json)
+// Widget Harga XAU/USD
 (function() {
   const container = document.getElementById('xauusd-price-widget');
   if (!container) return;
 
-  async function loadPrice() {
+  async function fetchLivePrice() {
+    // 1. Ambil harga real-time dari Gold-API (gratis)
     try {
-      // 1. Ambil data dari file market.json (hasil update GitHub Actions)
-      const res = await fetch(`data/market.json?t=${Date.now()}`); // ?t=... biar tidak kena cache browser
-      if (!res.ok) throw new Error('Gagal load market.json');
-      
-      const data = await res.json();
-      const price = parseFloat(data.price);
+      const r = await fetch('https://api.gold-api.com/price/XAU', { cache: 'no-store' });
+      if (r.ok) {
+        const j = await r.json();
+        const p = Number(j.price);
+        if (Number.isFinite(p) && p > 0) return p;
+      }
+    } catch (e) {}
 
-      if (!price || isNaN(price)) throw new Error('Harga kosong');
+    // 2. Fallback: Ambil dari file market.json (hasil GitHub Actions)
+    try {
+      const r = await fetch(`data/market.json?v=${Date.now()}`, { cache: 'no-store' });
+      if (r.ok) {
+        const j = await r.json();
+        const p = Number(j.price);
+        if (Number.isFinite(p) && p > 0) return p;
+      }
+    } catch (e) {}
 
-      // 2. Tampilkan ke layar
+    return null;
+  }
+
+  async function updateWidget() {
+    const price = await fetchLivePrice();
+    if (price) {
       const formatted = price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       
       container.innerHTML = `
-        <div style="display:flex; align-items:center; gap:8px; font-family:monospace;">
-          <span style="color:#94a3b8; font-size:12px; font-weight:600;">XAU/USD</span>
-          <span style="color:#10b981; font-size:16px; font-weight:bold;">$${formatted}</span>
-          <span style="color:#10b981; font-size:10px;">● LIVE</span>
+        <div style="font-family:monospace;">
+          <div style="display:flex; align-items:center; justify-content:flex-end; gap:6px;">
+            <span style="color:#94a3b8; font-size:11px; font-weight:600;">XAU/USD</span>
+            <span style="color:#10b981; font-size:15px; font-weight:bold;">$${formatted}</span>
+          </div>
+          <div style="color:#10b981; font-size:10px; text-align:right;">● LIVE</div>
         </div>
       `;
-    } catch (err) {
-      console.warn('Widget error:', err);
+      
+      // Kirim harga terbaru ke index.html agar TP/SL terupdate otomatis
+      if (window.applyLiveXauPrice) {
+        window.applyLiveXauPrice(price);
+      }
+    } else {
       container.innerHTML = `
-        <div style="color:#f43f5e; font-size:12px; font-family:monospace; border:1px solid #f43f5e; padding:4px 8px; border-radius:4px;">
+        <div style="color:#f43f5e; font-size:11px; font-family:monospace; text-align:right;">
           XAU/USD ● OFFLINE
         </div>
       `;
     }
   }
 
-  // Jalankan saat halaman dimuat
-  loadPrice();
-
-  // Refresh otomatis tiap 5 menit (300.000 ms)
-  setInterval(loadPrice, 300000);
+  updateWidget();
+  setInterval(updateWidget, 30000); 
 })();
