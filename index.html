@@ -19,17 +19,29 @@
     .section-head{display:flex;justify-content:space-between;align-items:end;margin:30px 4px 15px}.section-head h3{font:800 25px Manrope;margin:0}.section-head p{color:var(--muted);margin:3px 0}.timeline{position:relative}.day{margin-bottom:19px}.datebar{display:flex;gap:10px;align-items:center;margin:0 0 10px 15px}.datebar strong{font:800 17px Manrope}.datebar span{color:var(--muted)}
     .event{border-radius:24px;padding:22px;display:grid;grid-template-columns:minmax(210px,1.5fr) repeat(3,minmax(90px,.55fr)) minmax(165px,.75fr);gap:16px;align-items:center;margin-bottom:11px;transition:.2s;background:rgba(5,15,23,.44)}.event:hover{transform:translateY(-2px);box-shadow:0 23px 58px rgba(0,0,0,.4);background:rgba(8,24,34,.58)}.event-title{display:flex;gap:14px;align-items:flex-start}.flag{width:42px;height:42px;display:grid;place-items:center;border-radius:14px;background:rgba(24,78,94,.36);font-size:20px;flex:none}.event h4{font:700 17px Manrope;margin:0 0 3px}.event-title p,.metric span{color:var(--muted);font-size:12px;margin:0}.metric b{display:block;margin-top:3px;color:#e9f8fc}.impact{display:inline-flex;padding:4px 9px;border-radius:99px;background:rgba(43,157,181,.18);color:#72d4e4;font-size:11px;font-weight:800}.signal{border-radius:18px;padding:12px 14px;background:rgba(4,14,21,.42)}.signal.long{background:rgba(18,139,105,.2);color:var(--green)}.signal.short{background:rgba(181,44,66,.2);color:var(--red)}.signal.wait{background:rgba(177,122,33,.2);color:#ffc96b}.signal b{font:800 18px Manrope}.signal small{display:block}.expand{grid-column:1/-1;border-top:1px solid var(--line);padding-top:17px;display:grid;grid-template-columns:1.4fr .6fr;gap:20px}.reason b{display:block;margin-bottom:4px}.reason p{color:var(--muted);margin:0}.meter-row{display:flex;align-items:center;gap:12px}.meter{height:10px;background:rgba(117,164,177,.16);border-radius:99px;overflow:hidden;flex:1}.meter i{display:block;height:100%;width:var(--score);background:var(--meter);border-radius:inherit}.score{font:800 19px Manrope;color:var(--meter)}.empty{border-radius:24px;padding:45px;text-align:center;color:var(--muted)}.footer{margin-top:26px;padding:20px;text-align:center;color:var(--muted);font-size:12px}.hidden{display:none!important}
     @media(max-width:950px){.hero{grid-template-columns:1fr}.event{grid-template-columns:1fr 1fr 1fr}.event-title{grid-column:1/-1}.signal{grid-column:2/4}.expand{grid-template-columns:1fr}}@media(max-width:620px){.shell{width:min(100% - 18px,1380px)}header{padding:18px;align-items:flex-start}.brand p{display:none}.live{font-size:12px}.intro{padding:23px}.intro h2{letter-spacing:-1.4px}.stats{grid-template-columns:1fr}.toolbar{top:5px}.status{width:100%}.event{grid-template-columns:1fr 1fr;padding:17px}.signal{grid-column:1/-1}.metric:nth-of-type(3){grid-column:1/-1}.expand{grid-column:1/-1}}
-  .tpsl{grid-column:1/-1;display:flex;gap:14px;flex-wrap:wrap;padding:10px 14px;border-radius:14px;background:rgba(43,157,181,.10);border:1px dashed rgba(114,212,228,.35);font-size:13px;color:#cfe9ef}.tpsl b{color:#72d4e4;margin-right:6px;font-weight:800}.tpsl span{background:rgba(4,14,21,.4);padding:5px 10px;border-radius:8px}
+    
+    /* STYLE UNTUK EXECUTION LEVELS & WARNING */
+    .tpsl{grid-column:1/-1;display:flex;gap:14px;flex-wrap:wrap;padding:10px 14px;border-radius:14px;background:rgba(43,157,181,.10);border:1px dashed rgba(114,212,228,.35);font-size:13px;color:#cfe9ef}.tpsl b{color:#72d4e4;margin-right:6px;font-weight:800}.tpsl span{background:rgba(4,14,21,.4);padding:5px 10px;border-radius:8px}
+    .warning-badge { background: rgba(255,100,125,0.15); color: var(--red); border: 1px solid rgba(255,100,125,0.3); padding: 5px 10px; border-radius: 8px; font-size: 11px; display: inline-block; margin-bottom: 10px; font-weight: bold; }
+    .exec-box { width: 100%; margin-top: 10px; background: rgba(242, 184, 75, 0.05); border: 1px solid rgba(242, 184, 75, 0.3); border-radius: 12px; padding: 12px; }
+    .exec-box h5 { margin: 0 0 8px 0; color: var(--amber); font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
+    .exec-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .exec-card { background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; font-size: 12px; border-left: 3px solid; }
+    .exec-card.buy { border-color: var(--green); }
+    .exec-card.sell { border-color: var(--red); }
+    .exec-card b { display: block; margin-bottom: 4px; }
+    .exec-card .val { color: #fff; margin-bottom: 2px; }
+    .oco-note { font-size: 11px; color: var(--muted); margin-top: 8px; font-style: italic; }
 
-.forex-container { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; border-top: 1px dashed rgba(255,255,255,.1); padding-top: 10px; width: 100%; }
-.forex-card { background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 8px; flex: 1 1 120px; font-size: 11px; }
-.forex-card.long { border-left: 3px solid var(--green); }
-.forex-card.long b { color: var(--green) !important; }
-.forex-card.short { border-left: 3px solid var(--red); }
-.forex-card.short b { color: var(--red) !important; }
-.forex-card b { font-size: 12px; }
-.forex-card .val { color: #fff; }
-.validity { width: 100%; color: #ffc96b; font-weight: bold; margin-bottom: 5px; font-size:12px; }
+    .forex-container { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; border-top: 1px dashed rgba(255,255,255,.1); padding-top: 10px; width: 100%; }
+    .forex-card { background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 8px; flex: 1 1 120px; font-size: 11px; }
+    .forex-card.long { border-left: 3px solid var(--green); }
+    .forex-card.long b { color: var(--green) !important; }
+    .forex-card.short { border-left: 3px solid var(--red); }
+    .forex-card.short b { color: var(--red) !important; }
+    .forex-card b { font-size: 12px; }
+    .forex-card .val { color: #fff; }
+    .validity { width: 100%; color: #ffc96b; font-weight: bold; margin-bottom: 5px; font-size:12px; }
 </style>
 </head>
 <body><main class="shell">
@@ -42,10 +54,8 @@
       </div>
     </div>
     
-    <!-- KOTAK WIDGET HARGA -->
     <div style="display: flex; align-items: center; gap: 16px;">
       <div id="xauusd-price-widget" style="background: rgba(0,0,0,0.2); border: 1px solid var(--line); padding: 10px 14px; border-radius: 12px; min-width: 140px;"></div>
-      
       <div class="live"><i class="dot"></i><span id="liveText">SYNCING DATA</span></div>
     </div>
   </header>
@@ -183,73 +193,107 @@ function tpSl(a, e) {
     if (!LIVE_PRICE) return '';
     const directed = a.dir === 'long' || a.dir === 'short';
     const upcoming = !String(e.Actual ?? '').trim();
-    if (!directed && !(upcoming && (+e.Importance || 1) >= 2)) return '';
+    const impact = +e.Importance || 1;
+    
+    // Sembunyikan jika bukan sinyal arah DAN bukan berita medium/high impact
+    if (!directed && !(upcoming && impact >= 2)) return '';
 
     const isUSDWeak = a.dir === 'long';
     const validUntil = fmtDate(new Date(e.Date)) + ' pukul ' + fmtTime(new Date(e.Date));
-    const riskPct = 0.5, rewardPct = 1.0;
-    const entry = LIVE_PRICE;
-    const sl = directed ? (isUSDWeak ? entry * (1 - riskPct/100) : entry * (1 + riskPct/100)) : null;
-    const tp = directed ? (isUSDWeak ? entry * (1 + rewardPct/100) : entry * (1 - rewardPct/100)) : null;
     const f = n => n.toFixed(2);
 
     let html = `<div class="tpsl" style="display:flex; flex-direction:column; gap:10px;">`;
-    html += directed
-        ? `<div class="validity">⚠️ Entry pasar riil ${a.dir.toUpperCase()} — valid hingga ${validUntil}</div>`
-        : `<div class="validity">📡 Harga pasar riil saat ini — siap entry saat Actual rilis (${validUntil})</div>`;
 
-    html += `<div style="display:flex; gap:14px; flex-wrap:wrap;">`;
-    html += `<span style="color:#72d4e4; font-weight:bold; width:100%;">XAU/USD (Gold)</span>`;
-    if (directed) html += `<span><b>Entry</b> ${f(entry)}</span><span><b>SL</b> ${f(sl)}</span><span><b>TP</b> ${f(tp)}</span><span><b>R:R</b> 1:2.0</span>`;
-    else html += `<span><b>Spot</b> ${f(entry)}</span><span><b>Watch SL ±0.5%</b> ${f(entry * 0.995)} / ${f(entry * 1.005)}</span><span><b>Watch TP ±1%</b> ${f(entry * 0.99)} / ${f(entry * 1.01)}</span>`;
-    html += `</div>`;
+    if (directed) {
+        // JIKA SUDAH ADA SINYAL ARAH (Actual data sudah rilis)
+        const riskPct = 0.5, rewardPct = 1.0;
+        const entry = LIVE_PRICE;
+        const sl = isUSDWeak ? entry * (1 - riskPct/100) : entry * (1 + riskPct/100);
+        const tp = isUSDWeak ? entry * (1 + rewardPct/100) : entry * (1 - rewardPct/100);
 
-    if (Object.keys(FOREX_RATES).length > 0) {
-        const forexPairs = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CHF', 'AUD/USD', 'USD/CAD'];
-        html += `<div class="forex-container"><span style="color:#72d4e4; font-weight:bold; width:100%;">Forex Majors ${directed ? `(USD ${isUSDWeak ? 'Melemah' : 'Menguat'})` : '(spot pasar riil)'}</span>`;
-        forexPairs.forEach(pair => {
-            const rate = pairRate(pair);
-            if (!rate) return;
-            const isJpyStyle = rate > 10;
-            const slDist = isJpyStyle ? 0.30 : 0.0030;
-            const tpDist = isJpyStyle ? 0.60 : 0.0060;
-            const dec = isJpyStyle ? 3 : 5;
-            if (!directed) {
-                html += `<div class="forex-card"><div>${pair} <b>WATCH</b></div><div class="val">Spot: ${rate.toFixed(dec)}</div></div>`;
-                return;
-            }
-            const dir = pair.startsWith('USD/') ? (isUSDWeak ? 'SHORT' : 'LONG') : (isUSDWeak ? 'LONG' : 'SHORT');
-            const fxSl = dir === 'LONG' ? rate - slDist : rate + slDist;
-            const fxTp = dir === 'LONG' ? rate + tpDist : rate - tpDist;
-            const cls = dir === 'LONG' ? 'long' : 'short';
-            html += `<div class="forex-card ${cls}"><div>${pair} <b>${dir}</b></div><div class="val">Entry: ${rate.toFixed(dec)}</div><div class="val" style="color:var(--red)">SL: ${fxSl.toFixed(dec)}</div><div class="val" style="color:var(--green)">TP: ${fxTp.toFixed(dec)}</div></div>`;
-        });
+        html += `<div class="validity">⚠️ Entry pasar riil ${a.dir.toUpperCase()} — valid hingga ${validUntil}</div>`;
+        html += `<div style="display:flex; gap:14px; flex-wrap:wrap;">`;
+        html += `<span style="color:#72d4e4; font-weight:bold; width:100%;">XAU/USD (Gold)</span>`;
+        html += `<span><b>Entry</b> ${f(entry)}</span><span><b>SL</b> ${f(sl)}</span><span><b>TP</b> ${f(tp)}</span><span><b>R:R</b> 1:2.0</span>`;
         html += `</div>`;
+
+        if (Object.keys(FOREX_RATES).length > 0) {
+            const forexPairs = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CHF', 'AUD/USD', 'USD/CAD'];
+            html += `<div class="forex-container"><span style="color:#72d4e4; font-weight:bold; width:100%;">Forex Majors (USD ${isUSDWeak ? 'Melemah' : 'Menguat'})</span>`;
+            forexPairs.forEach(pair => {
+                const rate = pairRate(pair);
+                if (!rate) return;
+                const isJpyStyle = rate > 10;
+                const slDist = isJpyStyle ? 0.30 : 0.0030;
+                const tpDist = isJpyStyle ? 0.60 : 0.0060;
+                const dec = isJpyStyle ? 3 : 5;
+                const dir = pair.startsWith('USD/') ? (isUSDWeak ? 'SHORT' : 'LONG') : (isUSDWeak ? 'LONG' : 'SHORT');
+                const fxSl = dir === 'LONG' ? rate - slDist : rate + slDist;
+                const fxTp = dir === 'LONG' ? rate + tpDist : rate - tpDist;
+                const cls = dir === 'LONG' ? 'long' : 'short';
+                html += `<div class="forex-card ${cls}"><div>${pair} <b>${dir}</b></div><div class="val">Entry: ${rate.toFixed(dec)}</div><div class="val" style="color:var(--red)">SL: ${fxSl.toFixed(dec)}</div><div class="val" style="color:var(--green)">TP: ${fxTp.toFixed(dec)}</div></div>`;
+            });
+            html += `</div>`;
+        }
+
+        if (Object.keys(CRYPTO_RATES).length > 0) {
+            html += `<div class="forex-container" style="border-top: 1px dashed rgba(255,255,255,.1); margin-top: 10px; padding-top: 10px;"><span style="color:#f7931a; font-weight:bold; width:100%;">Crypto Markets (USD ${isUSDWeak ? 'Melemah' : 'Menguat'})</span>`;
+            ['BTC/USD', 'ETH/USD'].forEach(pair => {
+                const rate = CRYPTO_RATES[pair];
+                if (!rate) return;
+                const fmt = n => n.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                const isBTC = pair === 'BTC/USD';
+                const bColor = isBTC ? '#f7931a' : '#627eea';
+                const dir = isUSDWeak ? 'LONG' : 'SHORT';
+                const slPct = isBTC ? 1.0 : 1.5;
+                const tpPct = isBTC ? 2.0 : 3.0;
+                const fxSl = dir === 'LONG' ? rate * (1 - slPct/100) : rate * (1 + slPct/100);
+                const fxTp = dir === 'LONG' ? rate * (1 + tpPct/100) : rate * (1 - tpPct/100);
+                const cls = dir === 'LONG' ? 'long' : 'short';
+                html += `<div class="forex-card ${cls}" style="border-left-color: ${bColor};"><div>${pair} <b>${dir}</b></div><div class="val">Entry: $${fmt(rate)}</div><div class="val" style="color:var(--red)">SL: $${fmt(fxSl)}</div><div class="val" style="color:var(--green)">TP: $${fmt(fxTp)}</div></div>`;
+            });
+            html += `</div>`;
+        }
+
+    } else {
+        // JIKA UPCOMING NEWS & IMPACT MEDIUM/HIGH (Status WAIT)
+        const buffer = LIVE_PRICE * 0.0015; // Jarak aman 0.15% dari harga (sekitar $6)
+        const buyStop = LIVE_PRICE + buffer;
+        const sellStop = LIVE_PRICE - buffer;
+        const slDist = buffer * 2.0; // SL 2x jarak buffer
+        const tpDist = buffer * 4.0; // TP 4x jarak buffer (RR 1:2)
+
+        const buySL = buyStop - slDist;
+        const buyTP = buyStop + tpDist;
+        const sellSL = sellStop + slDist;
+        const sellTP = sellStop - tpDist;
+
+        if (impact >= 3) {
+            html += `<div class="warning-badge">⚠️ HIGH IMPACT NEWS: Spread akan melebar. Gunakan Pending Order!</div>`;
+        }
+
+        html += `<div class="validity">📡 Harga saat ini: ${f(LIVE_PRICE)} — Siapkan order 5 menit sebelum rilis (${validUntil})</div>`;
+
+        html += `<div class="exec-box">
+            <h5>STRATEGI STRADDLE (OCO)</h5>
+            <div class="exec-grid">
+                <div class="exec-card buy">
+                    <b>BUY STOP (LONG)</b>
+                    <div class="val">Entry: ${f(buyStop)}</div>
+                    <div class="val" style="color:var(--red)">SL: ${f(buySL)}</div>
+                    <div class="val" style="color:var(--green)">TP: ${f(buyTP)}</div>
+                </div>
+                <div class="exec-card sell">
+                    <b>SELL STOP (SHORT)</b>
+                    <div class="val">Entry: ${f(sellStop)}</div>
+                    <div class="val" style="color:var(--red)">SL: ${f(sellSL)}</div>
+                    <div class="val" style="color:var(--green)">TP: ${f(sellTP)}</div>
+                </div>
+            </div>
+            <div class="oco-note">*OCO: Jika salah satu order tersentuh, batalkan order lainnya.</div>
+        </div>`;
     }
 
-    // Render Crypto
-    if (Object.keys(CRYPTO_RATES).length > 0) {
-        html += `<div class="forex-container" style="border-top: 1px dashed rgba(255,255,255,.1); margin-top: 10px; padding-top: 10px;"><span style="color:#f7931a; font-weight:bold; width:100%;">Crypto Markets ${directed ? `(USD ${isUSDWeak ? 'Melemah' : 'Menguat'})` : '(spot pasar riil)'}</span>`;
-        ['BTC/USD', 'ETH/USD'].forEach(pair => {
-            const rate = CRYPTO_RATES[pair];
-            if (!rate) return;
-            const fmt = n => n.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-            const isBTC = pair === 'BTC/USD';
-            const bColor = isBTC ? '#f7931a' : '#627eea';
-            if (!directed) {
-                html += `<div class="forex-card" style="border-left-color: ${bColor};"><div>${pair} <b>WATCH</b></div><div class="val">Spot: $${fmt(rate)}</div></div>`;
-                return;
-            }
-            const dir = isUSDWeak ? 'LONG' : 'SHORT';
-            const slPct = isBTC ? 1.0 : 1.5;
-            const tpPct = isBTC ? 2.0 : 3.0;
-            const fxSl = dir === 'LONG' ? rate * (1 - slPct/100) : rate * (1 + slPct/100);
-            const fxTp = dir === 'LONG' ? rate * (1 + tpPct/100) : rate * (1 - tpPct/100);
-            const cls = dir === 'LONG' ? 'long' : 'short';
-            html += `<div class="forex-card ${cls}" style="border-left-color: ${bColor};"><div>${pair} <b>${dir}</b></div><div class="val">Entry: $${fmt(rate)}</div><div class="val" style="color:var(--red)">SL: $${fmt(fxSl)}</div><div class="val" style="color:var(--green)">TP: $${fmt(fxTp)}</div></div>`;
-        });
-        html += `</div>`;
-    }
     html += `</div>`;
     return html;
 }
@@ -363,6 +407,6 @@ $('#refresh').onclick = () => { load(); loadForex(); loadCrypto(); };
 load(); loadForex(); loadCrypto();
 setInterval(() => { loadForex(); loadCrypto(); }, 60000);
 </script>
-  <script src="scripts/xauusd-price-widget.js?v=20260824-3"></script>
+  <script src="scripts/xauusd-price-widget.js?v=20260824-5"></script>
 </body>
 </html>
