@@ -6,8 +6,8 @@ on:
     paths:
       - "scripts/fetch-calendar.mjs"
       - ".github/workflows/update-calendar.yml"
-schedule:
-  - cron: "*/15 * * * *"
+  schedule:
+    - cron: "*/15 * * * *"
 
 permissions:
   contents: write
@@ -23,19 +23,27 @@ jobs:
         with:
           node-version: 22
 
-      - name: Fetch live calendar and XAU/USD price
+      - name: Fetch live calendar and gold price
         run: node scripts/fetch-calendar.mjs
         env:
+          GOLD_API_KEY: ${{ secrets.GOLD_API_KEY }}
           TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
 
       - name: Refresh widget cache version
         run: |
-          perl -0pi -e 's/scripts\/xauusd-price-widget\.js\?v=[0-9-]+/scripts\/xauusd-price-widget.js?v=20260824-3/g' index.html
+          STAMP=$(date -u +%Y%m%d%H%M)
+          perl -0pi -e "s#scripts/xauusd-price-widget\.js\?v=[0-9]+-[0-9]+#scripts/xauusd-price-widget.js?v=${STAMP}#g" index.html
+          grep -q "xauusd-price-widget.js?v=${STAMP}" index.html \
+            || { echo "::error::cache-buster gagal match di index.html"; exit 1; }
 
       - name: Commit refreshed data and assets
         run: |
           git config user.name calendar-bot
           git config user.email actions@users.noreply.github.com
           git add data/calendar.json data/market.json index.html
-          git diff --cached --quiet || git commit -m "chore: refresh widget cache version"
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git commit -m "chore: refresh live calendar & gold price $(date -u +%Y%m%d-%H%M)"
           git push
