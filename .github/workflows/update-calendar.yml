@@ -1,0 +1,41 @@
+name: Update live economic calendar
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "scripts/fetch-calendar.mjs"
+      - ".github/workflows/update-calendar.yml"
+  schedule:
+    - cron: "7 */2 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Fetch live calendar and XAU/USD price
+        run: node scripts/fetch-calendar.mjs
+        env:
+          TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
+
+      - name: Refresh widget cache version
+        run: |
+          perl -0pi -e 's/scripts\/xauusd-price-widget\.js\?v=[0-9-]+/scripts\/xauusd-price-widget.js?v=20260824-3/g' index.html
+
+      - name: Commit refreshed data and assets
+        run: |
+          git config user.name calendar-bot
+          git config user.email actions@users.noreply.github.com
+          git add data/calendar.json data/market.json index.html
+          git diff --cached --quiet || git commit -m "chore: refresh widget cache version"
+          git push
