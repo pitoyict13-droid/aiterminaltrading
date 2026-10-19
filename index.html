@@ -202,7 +202,7 @@ function tpSl(a, e) {
     const validUntil = fmtDate(new Date(e.Date)) + ' pukul ' + fmtTime(new Date(e.Date));
     const f = n => n.toFixed(2);
     
-    // PERBAIKAN: Cek apakah waktu berita sudah terlewati
+    // CEK EXPIRED
     const eventTime = new Date(e.Date).getTime();
     const isExpired = new Date().getTime() > eventTime;
 
@@ -264,10 +264,13 @@ function tpSl(a, e) {
         }
     }
 
+    // LOGIKA JUDUL DINAMIS
+    const statusText = directed ? `(USD ${isUSDWeak ? 'Melemah' : 'Menguat'})` : (isExpired ? '(Spot Prices - News Ended)' : '(Straddle Level)');
+
     // RENDER FOREX & CRYPTO
     if (Object.keys(FOREX_RATES).length > 0) {
         const forexPairs = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CHF', 'AUD/USD', 'USD/CAD'];
-        html += `<div class="forex-container"><span style="color:#72d4e4; font-weight:bold; width:100%;">Forex Majors ${directed ? `(USD ${isUSDWeak ? 'Melemah' : 'Menguat'})` : '(Straddle Level)'}</span>`;
+        html += `<div class="forex-container"><span style="color:#72d4e4; font-weight:bold; width:100%;">Forex Majors ${statusText}</span>`;
         forexPairs.forEach(pair => {
             const rate = pairRate(pair);
             if (!rate) return;
@@ -302,7 +305,7 @@ function tpSl(a, e) {
     }
 
     if (Object.keys(CRYPTO_RATES).length > 0) {
-        html += `<div class="forex-container" style="border-top: 1px dashed rgba(255,255,255,.1); margin-top: 10px; padding-top: 10px;"><span style="color:#f7931a; font-weight:bold; width:100%;">Crypto Markets ${directed ? `(USD ${isUSDWeak ? 'Melemah' : 'Menguat'})` : '(Straddle Level)'}</span>`;
+        html += `<div class="forex-container" style="border-top: 1px dashed rgba(255,255,255,.1); margin-top: 10px; padding-top: 10px;"><span style="color:#f7931a; font-weight:bold; width:100%;">Crypto Markets ${statusText}</span>`;
         ['BTC/USD', 'ETH/USD'].forEach(pair => {
             const rate = CRYPTO_RATES[pair];
             if (!rate) return;
@@ -333,7 +336,7 @@ function tpSl(a, e) {
             const fxSl = dir === 'LONG' ? rate * (1 - slPct/100) : rate * (1 + slPct/100);
             const fxTp = dir === 'LONG' ? rate * (1 + tpPct/100) : rate * (1 - tpPct/100);
             const cls = dir === 'LONG' ? 'long' : 'short';
-            html += `<div class="forex-card ${cls}" style="border-left-color: ${bColor};"><div>${pair} <b>${dir}</b></div><div class="val">Entry: $${fmt(rate)}</div><div class="val" style="color:var(--red)">SL: $${fmt(fxSl)}</div><div class="val" style="color:var(--green)">TP: ${fmt(fxTp)}</div></div>`;
+            html += `<div class="forex-card ${cls}" style="border-left-color: ${bColor};"><div>${pair} <b>${dir}</b></div><div class="val">Entry: $${fmt(rate)}</div><div class="val" style="color:var(--red)">SL: $${fmt(fxSl)}</div><div class="val" style="color:var(--green)">TP: $${fmt(fxTp)}</div></div>`;
         });
         html += `</div>`;
     }
@@ -452,6 +455,6 @@ $('#refresh').onclick = () => { load(); loadForex(); loadCrypto(); };
 load(); loadForex(); loadCrypto();
 setInterval(() => { loadForex(); loadCrypto(); }, 60000);
 </script>
-  <script src="scripts/xauusd-price-widget.js?v=20260824-10"></script>
+  <script src="scripts/xauusd-price-widget.js?v=20260824-11"></script>
 </body>
 </html>
