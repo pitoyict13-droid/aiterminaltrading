@@ -202,9 +202,9 @@ function tpSl(a, e) {
     const validUntil = fmtDate(new Date(e.Date)) + ' pukul ' + fmtTime(new Date(e.Date));
     const f = n => n.toFixed(2);
     
-    // CEK EXPIRED (Berita sudah lewat 30 menit)
+    // PERBAIKAN: Cek apakah waktu berita sudah terlewati
     const eventTime = new Date(e.Date).getTime();
-    const isExpired = new Date().getTime() > (eventTime + 30 * 60 * 1000);
+    const isExpired = new Date().getTime() > eventTime;
 
     let html = `<div class="tpsl" style="display:flex; flex-direction:column; gap:10px;">`;
 
@@ -223,14 +223,14 @@ function tpSl(a, e) {
     } else {
         // JIKA UPCOMING NEWS & IMPACT MEDIUM/HIGH (Status WAIT)
         if (isExpired) {
-            html += `<div class="expired-badge">⏳ Sesi berita telah berakhir. Straddle tidak lagi valid.</div>`;
+            html += `<div class="expired-badge">⏳ Menunggu data Actual (Rilis sedang berlangsung).</div>`;
             html += `<div class="validity">📡 Harga saat ini: ${f(LIVE_PRICE)}</div>`;
         } else {
-            const buffer = LIVE_PRICE * 0.0015; // Jarak aman 0.15%
+            const buffer = LIVE_PRICE * 0.0015;
             const buyStop = LIVE_PRICE + buffer;
             const sellStop = LIVE_PRICE - buffer;
-            const slDist = buffer * 2.0; // SL 2x jarak buffer
-            const tpDist = buffer * 4.0; // TP 4x jarak buffer (RR 1:2)
+            const slDist = buffer * 2.0;
+            const tpDist = buffer * 4.0;
 
             const buySL = buyStop - slDist;
             const buyTP = buyStop + tpDist;
@@ -333,7 +333,7 @@ function tpSl(a, e) {
             const fxSl = dir === 'LONG' ? rate * (1 - slPct/100) : rate * (1 + slPct/100);
             const fxTp = dir === 'LONG' ? rate * (1 + tpPct/100) : rate * (1 - tpPct/100);
             const cls = dir === 'LONG' ? 'long' : 'short';
-            html += `<div class="forex-card ${cls}" style="border-left-color: ${bColor};"><div>${pair} <b>${dir}</b></div><div class="val">Entry: $${fmt(rate)}</div><div class="val" style="color:var(--red)">SL: $${fmt(fxSl)}</div><div class="val" style="color:var(--green)">TP: $${fmt(fxTp)}</div></div>`;
+            html += `<div class="forex-card ${cls}" style="border-left-color: ${bColor};"><div>${pair} <b>${dir}</b></div><div class="val">Entry: $${fmt(rate)}</div><div class="val" style="color:var(--red)">SL: $${fmt(fxSl)}</div><div class="val" style="color:var(--green)">TP: ${fmt(fxTp)}</div></div>`;
         });
         html += `</div>`;
     }
@@ -378,10 +378,8 @@ async function load() {
             const urls = ['https://nfs.faireconomy.media/ff_calendar_thisweek.json', 'https://nfs.faireconomy.media/ff_calendar_nextweek.json'];
             const batches = await Promise.all(urls.map(async u => { const r = await fetch(u, { cache: 'no-store' }); return r.ok ? r.json() : []; }));
             const rank = { Low: 1, Medium: 2, High: 3 };
-            // MENAMBAHKAN KEYWORD MINYAK/ENERGI DAN KANADA
             const keywords = /fed|fomc|interest rate|inflation|cpi|pce|payroll|employment|unemployment|jobless|gdp|pmi|ism|retail sales|consumer confidence|jolts|durable goods|powell|treasury|oil|crude|energy|gas|opec|eia|rig|inventories|distillate|gasoline/i;
             const allowedCountries = ['USD', 'EUR', 'GBP', 'JPY', 'AUD', 'NZD', 'CAD'];
-            
             raw = batches.flat().filter(e => allowedCountries.includes(String(e.country || '').toUpperCase()) && keywords.test(e.title || '')).map(e => ({
                 Date: e.date, Event: e.title, Country: e.country, Importance: rank[e.impact] || 1, Forecast: e.forecast || '', Previous: e.previous || '', Actual: e.actual || ''
             }));
@@ -454,6 +452,6 @@ $('#refresh').onclick = () => { load(); loadForex(); loadCrypto(); };
 load(); loadForex(); loadCrypto();
 setInterval(() => { loadForex(); loadCrypto(); }, 60000);
 </script>
-  <script src="scripts/xauusd-price-widget.js?v=20260824-3"></script>
+  <script src="scripts/xauusd-price-widget.js?v=20260824-10"></script>
 </body>
 </html>
