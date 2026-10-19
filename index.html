@@ -202,14 +202,12 @@ function tpSl(a, e) {
     const validUntil = fmtDate(new Date(e.Date)) + ' pukul ' + fmtTime(new Date(e.Date));
     const f = n => n.toFixed(2);
     
-    // CEK EXPIRED
     const eventTime = new Date(e.Date).getTime();
     const isExpired = new Date().getTime() > eventTime;
 
     let html = `<div class="tpsl" style="display:flex; flex-direction:column; gap:10px;">`;
 
     if (directed) {
-        // JIKA SUDAH ADA SINYAL ARAH (Actual data sudah rilis)
         const riskPct = 0.5, rewardPct = 1.0;
         const entry = LIVE_PRICE;
         const sl = isUSDWeak ? entry * (1 - riskPct/100) : entry * (1 + riskPct/100);
@@ -221,7 +219,6 @@ function tpSl(a, e) {
         html += `<span><b>Entry</b> ${f(entry)}</span><span><b>SL</b> ${f(sl)}</span><span><b>TP</b> ${f(tp)}</span><span><b>R:R</b> 1:2.0</span>`;
         html += `</div>`;
     } else {
-        // JIKA UPCOMING NEWS & IMPACT MEDIUM/HIGH (Status WAIT)
         if (isExpired) {
             html += `<div class="expired-badge">⏳ Menunggu data Actual (Rilis sedang berlangsung).</div>`;
             html += `<div class="validity">📡 Harga saat ini: ${f(LIVE_PRICE)}</div>`;
@@ -264,10 +261,8 @@ function tpSl(a, e) {
         }
     }
 
-    // LOGIKA JUDUL DINAMIS
     const statusText = directed ? `(USD ${isUSDWeak ? 'Melemah' : 'Menguat'})` : (isExpired ? '(Spot Prices - News Ended)' : '(Straddle Level)');
 
-    // RENDER FOREX & CRYPTO
     if (Object.keys(FOREX_RATES).length > 0) {
         const forexPairs = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CHF', 'AUD/USD', 'USD/CAD'];
         html += `<div class="forex-container"><span style="color:#72d4e4; font-weight:bold; width:100%;">Forex Majors ${statusText}</span>`;
@@ -336,7 +331,7 @@ function tpSl(a, e) {
             const fxSl = dir === 'LONG' ? rate * (1 - slPct/100) : rate * (1 + slPct/100);
             const fxTp = dir === 'LONG' ? rate * (1 + tpPct/100) : rate * (1 - tpPct/100);
             const cls = dir === 'LONG' ? 'long' : 'short';
-            html += `<div class="forex-card ${cls}" style="border-left-color: ${bColor};"><div>${pair} <b>${dir}</b></div><div class="val">Entry: $${fmt(rate)}</div><div class="val" style="color:var(--red)">SL: $${fmt(fxSl)}</div><div class="val" style="color:var(--green)">TP: $${fmt(fxTp)}</div></div>`;
+            html += `<div class="forex-card ${cls}" style="border-left-color: ${bColor};"><div>${pair} <b>${dir}</b></div><div class="val">Entry: $${fmt(rate)}</div><div class="val" style="color:var(--red)">SL: $${fmt(fxSl)}</div><div class="val" style="color:var(--green)">TP: ${fmt(fxTp)}</div></div>`;
         });
         html += `</div>`;
     }
@@ -405,7 +400,16 @@ function render() {
     const now = new Date();
     if (!['upcoming', 'high', 'history'].includes(filter)) filter = 'all';
     
-    let list = events.filter(e => filter === 'all' || (filter === 'upcoming' && new Date(e.Date) >= now) || (filter === 'high' && e.Importance >= 3));
+    // FITUR BARU: Sembunyikan berita jika sudah lewat 2 jam DAN Actual masih kosong
+    let list = events.filter(e => {
+        const eventTime = new Date(e.Date).getTime();
+        const isExpiredTwoHours = now.getTime() > (eventTime + 2 * 60 * 60 * 1000);
+        const isActualMissing = !String(e.Actual ?? '').trim();
+        
+        if (isExpiredTwoHours && isActualMissing) return false; // Jangan tampilkan jika basi & tidak ada hasil
+
+        return filter === 'all' || (filter === 'upcoming' && new Date(e.Date) >= now) || (filter === 'high' && e.Importance >= 3);
+    });
     
     $('#eventCount').textContent = events.length;
     $('#highCount').textContent = events.filter(e => e.Importance >= 3).length;
@@ -455,6 +459,6 @@ $('#refresh').onclick = () => { load(); loadForex(); loadCrypto(); };
 load(); loadForex(); loadCrypto();
 setInterval(() => { loadForex(); loadCrypto(); }, 60000);
 </script>
-  <script src="scripts/xauusd-price-widget.js?v=202610191454"></script>
+  <script src="scripts/xauusd-price-widget.js?v=20260824-12"></script>
 </body>
 </html>
