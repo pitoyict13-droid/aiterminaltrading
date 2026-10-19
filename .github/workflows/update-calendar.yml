@@ -6,8 +6,8 @@ on:
     paths:
       - "scripts/fetch-calendar.mjs"
       - ".github/workflows/update-calendar.yml"
-  schedule:
-    - cron: "7 */2 * * *"
+schedule:
+  - cron: "*/15 * * * *"
 
 permissions:
   contents: write
