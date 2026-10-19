@@ -195,7 +195,6 @@ function tpSl(a, e) {
     const upcoming = !String(e.Actual ?? '').trim();
     const impact = +e.Importance || 1;
     
-    // Sembunyikan jika bukan sinyal arah DAN bukan berita medium/high impact
     if (!directed && !(upcoming && impact >= 2)) return '';
 
     const isUSDWeak = a.dir === 'long';
@@ -216,48 +215,9 @@ function tpSl(a, e) {
         html += `<span style="color:#72d4e4; font-weight:bold; width:100%;">XAU/USD (Gold)</span>`;
         html += `<span><b>Entry</b> ${f(entry)}</span><span><b>SL</b> ${f(sl)}</span><span><b>TP</b> ${f(tp)}</span><span><b>R:R</b> 1:2.0</span>`;
         html += `</div>`;
-
-        if (Object.keys(FOREX_RATES).length > 0) {
-            const forexPairs = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CHF', 'AUD/USD', 'USD/CAD'];
-            html += `<div class="forex-container"><span style="color:#72d4e4; font-weight:bold; width:100%;">Forex Majors (USD ${isUSDWeak ? 'Melemah' : 'Menguat'})</span>`;
-            forexPairs.forEach(pair => {
-                const rate = pairRate(pair);
-                if (!rate) return;
-                const isJpyStyle = rate > 10;
-                const slDist = isJpyStyle ? 0.30 : 0.0030;
-                const tpDist = isJpyStyle ? 0.60 : 0.0060;
-                const dec = isJpyStyle ? 3 : 5;
-                const dir = pair.startsWith('USD/') ? (isUSDWeak ? 'SHORT' : 'LONG') : (isUSDWeak ? 'LONG' : 'SHORT');
-                const fxSl = dir === 'LONG' ? rate - slDist : rate + slDist;
-                const fxTp = dir === 'LONG' ? rate + tpDist : rate - tpDist;
-                const cls = dir === 'LONG' ? 'long' : 'short';
-                html += `<div class="forex-card ${cls}"><div>${pair} <b>${dir}</b></div><div class="val">Entry: ${rate.toFixed(dec)}</div><div class="val" style="color:var(--red)">SL: ${fxSl.toFixed(dec)}</div><div class="val" style="color:var(--green)">TP: ${fxTp.toFixed(dec)}</div></div>`;
-            });
-            html += `</div>`;
-        }
-
-        if (Object.keys(CRYPTO_RATES).length > 0) {
-            html += `<div class="forex-container" style="border-top: 1px dashed rgba(255,255,255,.1); margin-top: 10px; padding-top: 10px;"><span style="color:#f7931a; font-weight:bold; width:100%;">Crypto Markets (USD ${isUSDWeak ? 'Melemah' : 'Menguat'})</span>`;
-            ['BTC/USD', 'ETH/USD'].forEach(pair => {
-                const rate = CRYPTO_RATES[pair];
-                if (!rate) return;
-                const fmt = n => n.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                const isBTC = pair === 'BTC/USD';
-                const bColor = isBTC ? '#f7931a' : '#627eea';
-                const dir = isUSDWeak ? 'LONG' : 'SHORT';
-                const slPct = isBTC ? 1.0 : 1.5;
-                const tpPct = isBTC ? 2.0 : 3.0;
-                const fxSl = dir === 'LONG' ? rate * (1 - slPct/100) : rate * (1 + slPct/100);
-                const fxTp = dir === 'LONG' ? rate * (1 + tpPct/100) : rate * (1 - tpPct/100);
-                const cls = dir === 'LONG' ? 'long' : 'short';
-                html += `<div class="forex-card ${cls}" style="border-left-color: ${bColor};"><div>${pair} <b>${dir}</b></div><div class="val">Entry: $${fmt(rate)}</div><div class="val" style="color:var(--red)">SL: $${fmt(fxSl)}</div><div class="val" style="color:var(--green)">TP: $${fmt(fxTp)}</div></div>`;
-            });
-            html += `</div>`;
-        }
-
     } else {
         // JIKA UPCOMING NEWS & IMPACT MEDIUM/HIGH (Status WAIT)
-        const buffer = LIVE_PRICE * 0.0015; // Jarak aman 0.15% dari harga (sekitar $6)
+        const buffer = LIVE_PRICE * 0.0015; // Jarak aman 0.15%
         const buyStop = LIVE_PRICE + buffer;
         const sellStop = LIVE_PRICE - buffer;
         const slDist = buffer * 2.0; // SL 2x jarak buffer
@@ -292,6 +252,57 @@ function tpSl(a, e) {
             </div>
             <div class="oco-note">*OCO: Jika salah satu order tersentuh, batalkan order lainnya.</div>
         </div>`;
+    }
+
+    // RENDER FOREX & CRYPTO (Tampil di kedua state: WAIT & Directed)
+    if (Object.keys(FOREX_RATES).length > 0) {
+        const forexPairs = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CHF', 'AUD/USD', 'USD/CAD'];
+        html += `<div class="forex-container"><span style="color:#72d4e4; font-weight:bold; width:100%;">Forex Majors ${directed ? `(USD ${isUSDWeak ? 'Melemah' : 'Menguat'})` : '(spot pasar riil)'}</span>`;
+        forexPairs.forEach(pair => {
+            const rate = pairRate(pair);
+            if (!rate) return;
+            const isJpyStyle = rate > 10;
+            const slDist = isJpyStyle ? 0.30 : 0.0030;
+            const tpDist = isJpyStyle ? 0.60 : 0.0060;
+            const dec = isJpyStyle ? 3 : 5;
+            
+            if (!directed) {
+                html += `<div class="forex-card"><div>${pair} <b>WATCH</b></div><div class="val">Spot: ${rate.toFixed(dec)}</div></div>`;
+                return;
+            }
+            
+            const dir = pair.startsWith('USD/') ? (isUSDWeak ? 'SHORT' : 'LONG') : (isUSDWeak ? 'LONG' : 'SHORT');
+            const fxSl = dir === 'LONG' ? rate - slDist : rate + slDist;
+            const fxTp = dir === 'LONG' ? rate + tpDist : rate - tpDist;
+            const cls = dir === 'LONG' ? 'long' : 'short';
+            html += `<div class="forex-card ${cls}"><div>${pair} <b>${dir}</b></div><div class="val">Entry: ${rate.toFixed(dec)}</div><div class="val" style="color:var(--red)">SL: ${fxSl.toFixed(dec)}</div><div class="val" style="color:var(--green)">TP: ${fxTp.toFixed(dec)}</div></div>`;
+        });
+        html += `</div>`;
+    }
+
+    if (Object.keys(CRYPTO_RATES).length > 0) {
+        html += `<div class="forex-container" style="border-top: 1px dashed rgba(255,255,255,.1); margin-top: 10px; padding-top: 10px;"><span style="color:#f7931a; font-weight:bold; width:100%;">Crypto Markets ${directed ? `(USD ${isUSDWeak ? 'Melemah' : 'Menguat'})` : '(spot pasar riil)'}</span>`;
+        ['BTC/USD', 'ETH/USD'].forEach(pair => {
+            const rate = CRYPTO_RATES[pair];
+            if (!rate) return;
+            const fmt = n => n.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            const isBTC = pair === 'BTC/USD';
+            const bColor = isBTC ? '#f7931a' : '#627eea';
+            
+            if (!directed) {
+                html += `<div class="forex-card" style="border-left-color: ${bColor};"><div>${pair} <b>WATCH</b></div><div class="val">Spot: $${fmt(rate)}</div></div>`;
+                return;
+            }
+            
+            const dir = isUSDWeak ? 'LONG' : 'SHORT';
+            const slPct = isBTC ? 1.0 : 1.5;
+            const tpPct = isBTC ? 2.0 : 3.0;
+            const fxSl = dir === 'LONG' ? rate * (1 - slPct/100) : rate * (1 + slPct/100);
+            const fxTp = dir === 'LONG' ? rate * (1 + tpPct/100) : rate * (1 - tpPct/100);
+            const cls = dir === 'LONG' ? 'long' : 'short';
+            html += `<div class="forex-card ${cls}" style="border-left-color: ${bColor};"><div>${pair} <b>${dir}</b></div><div class="val">Entry: $${fmt(rate)}</div><div class="val" style="color:var(--red)">SL: $${fmt(fxSl)}</div><div class="val" style="color:var(--green)">TP: $${fmt(fxTp)}</div></div>`;
+        });
+        html += `</div>`;
     }
 
     html += `</div>`;
@@ -407,6 +418,6 @@ $('#refresh').onclick = () => { load(); loadForex(); loadCrypto(); };
 load(); loadForex(); loadCrypto();
 setInterval(() => { loadForex(); loadCrypto(); }, 60000);
 </script>
-  <script src="scripts/xauusd-price-widget.js?v=20260824-5"></script>
+  <script src="scripts/xauusd-price-widget.js?v=20260824-6"></script>
 </body>
 </html>
