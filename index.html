@@ -254,10 +254,10 @@ function tpSl(a, e) {
         </div>`;
     }
 
-    // RENDER FOREX & CRYPTO (Tampil di kedua state: WAIT & Directed)
+    // RENDER FOREX & CRYPTO
     if (Object.keys(FOREX_RATES).length > 0) {
         const forexPairs = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CHF', 'AUD/USD', 'USD/CAD'];
-        html += `<div class="forex-container"><span style="color:#72d4e4; font-weight:bold; width:100%;">Forex Majors ${directed ? `(USD ${isUSDWeak ? 'Melemah' : 'Menguat'})` : '(spot pasar riil)'}</span>`;
+        html += `<div class="forex-container"><span style="color:#72d4e4; font-weight:bold; width:100%;">Forex Majors ${directed ? `(USD ${isUSDWeak ? 'Melemah' : 'Menguat'})` : '(Straddle Level)'}</span>`;
         forexPairs.forEach(pair => {
             const rate = pairRate(pair);
             if (!rate) return;
@@ -267,7 +267,14 @@ function tpSl(a, e) {
             const dec = isJpyStyle ? 3 : 5;
             
             if (!directed) {
-                html += `<div class="forex-card"><div>${pair} <b>WATCH</b></div><div class="val">Spot: ${rate.toFixed(dec)}</div></div>`;
+                const buffer = isJpyStyle ? 0.15 : 0.0015;
+                const pipMultiplier = isJpyStyle ? 100 : 10000;
+                html += `<div class="forex-card" style="border-left-color: var(--amber);">
+                    <div>${pair} <b style="color:var(--amber)">STRADDLE</b></div>
+                    <div class="val" style="color:var(--green); font-size:11px;">B.STOP: ${(rate + buffer).toFixed(dec)}</div>
+                    <div class="val" style="color:var(--red); font-size:11px;">S.STOP: ${(rate - buffer).toFixed(dec)}</div>
+                    <div class="val" style="color:var(--muted); font-size:9px;">SL/TP: ${slDist*pipMultiplier}/${tpDist*pipMultiplier} pips</div>
+                </div>`;
                 return;
             }
             
@@ -281,7 +288,7 @@ function tpSl(a, e) {
     }
 
     if (Object.keys(CRYPTO_RATES).length > 0) {
-        html += `<div class="forex-container" style="border-top: 1px dashed rgba(255,255,255,.1); margin-top: 10px; padding-top: 10px;"><span style="color:#f7931a; font-weight:bold; width:100%;">Crypto Markets ${directed ? `(USD ${isUSDWeak ? 'Melemah' : 'Menguat'})` : '(spot pasar riil)'}</span>`;
+        html += `<div class="forex-container" style="border-top: 1px dashed rgba(255,255,255,.1); margin-top: 10px; padding-top: 10px;"><span style="color:#f7931a; font-weight:bold; width:100%;">Crypto Markets ${directed ? `(USD ${isUSDWeak ? 'Melemah' : 'Menguat'})` : '(Straddle Level)'}</span>`;
         ['BTC/USD', 'ETH/USD'].forEach(pair => {
             const rate = CRYPTO_RATES[pair];
             if (!rate) return;
@@ -290,7 +297,15 @@ function tpSl(a, e) {
             const bColor = isBTC ? '#f7931a' : '#627eea';
             
             if (!directed) {
-                html += `<div class="forex-card" style="border-left-color: ${bColor};"><div>${pair} <b>WATCH</b></div><div class="val">Spot: $${fmt(rate)}</div></div>`;
+                const bufferPct = isBTC ? 0.3 : 0.5;
+                const slPct = bufferPct * 2;
+                const tpPct = bufferPct * 4;
+                html += `<div class="forex-card" style="border-left-color: var(--amber);">
+                    <div>${pair} <b style="color:var(--amber)">STRADDLE</b></div>
+                    <div class="val" style="color:var(--green); font-size:11px;">B.STOP: $${fmt(rate * (1 + bufferPct/100))}</div>
+                    <div class="val" style="color:var(--red); font-size:11px;">S.STOP: $${fmt(rate * (1 - bufferPct/100))}</div>
+                    <div class="val" style="color:var(--muted); font-size:9px;">SL/TP: ${slPct}% / ${tpPct}%</div>
+                </div>`;
                 return;
             }
             
@@ -418,6 +433,6 @@ $('#refresh').onclick = () => { load(); loadForex(); loadCrypto(); };
 load(); loadForex(); loadCrypto();
 setInterval(() => { loadForex(); loadCrypto(); }, 60000);
 </script>
-  <script src="scripts/xauusd-price-widget.js?v=20260824-6"></script>
+  <script src="scripts/xauusd-price-widget.js?v=20260824-7"></script>
 </body>
 </html>
