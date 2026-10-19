@@ -23,6 +23,7 @@
     /* STYLE UNTUK EXECUTION LEVELS & WARNING */
     .tpsl{grid-column:1/-1;display:flex;gap:14px;flex-wrap:wrap;padding:10px 14px;border-radius:14px;background:rgba(43,157,181,.10);border:1px dashed rgba(114,212,228,.35);font-size:13px;color:#cfe9ef}.tpsl b{color:#72d4e4;margin-right:6px;font-weight:800}.tpsl span{background:rgba(4,14,21,.4);padding:5px 10px;border-radius:8px}
     .warning-badge { background: rgba(255,100,125,0.15); color: var(--red); border: 1px solid rgba(255,100,125,0.3); padding: 5px 10px; border-radius: 8px; font-size: 11px; display: inline-block; margin-bottom: 10px; font-weight: bold; }
+    .expired-badge { background: rgba(145,174,184,0.15); color: var(--muted); border: 1px solid rgba(145,174,184,0.3); padding: 5px 10px; border-radius: 8px; font-size: 11px; display: inline-block; margin-bottom: 10px; font-weight: bold; }
     .exec-box { width: 100%; margin-top: 10px; background: rgba(242, 184, 75, 0.05); border: 1px solid rgba(242, 184, 75, 0.3); border-radius: 12px; padding: 12px; }
     .exec-box h5 { margin: 0 0 8px 0; color: var(--amber); font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
     .exec-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -84,7 +85,7 @@ function num(v) {
 }
 function countryCode(c) {
     const u = String(c || 'USD').trim().toUpperCase();
-    return ({ 'UNITED STATES': 'USD', US: 'USD', USA: 'USD', EUROZONE: 'EUR', 'EURO AREA': 'EUR', UK: 'GBP', 'UNITED KINGDOM': 'GBP', JAPAN: 'JPY', AUSTRALIA: 'AUD', 'NEW ZEALAND': 'NZD' }[u] || u);
+    return ({ 'UNITED STATES': 'USD', US: 'USD', USA: 'USD', CANADA: 'CAD', CA: 'CAD', EUROZONE: 'EUR', 'EURO AREA': 'EUR', UK: 'GBP', 'UNITED KINGDOM': 'GBP', JAPAN: 'JPY', AUSTRALIA: 'AUD', 'NEW ZEALAND': 'NZD' }[u] || u);
 }
 const WITA = 'Asia/Makassar';
 
@@ -200,6 +201,10 @@ function tpSl(a, e) {
     const isUSDWeak = a.dir === 'long';
     const validUntil = fmtDate(new Date(e.Date)) + ' pukul ' + fmtTime(new Date(e.Date));
     const f = n => n.toFixed(2);
+    
+    // CEK EXPIRED (Berita sudah lewat 30 menit)
+    const eventTime = new Date(e.Date).getTime();
+    const isExpired = new Date().getTime() > (eventTime + 30 * 60 * 1000);
 
     let html = `<div class="tpsl" style="display:flex; flex-direction:column; gap:10px;">`;
 
@@ -217,41 +222,46 @@ function tpSl(a, e) {
         html += `</div>`;
     } else {
         // JIKA UPCOMING NEWS & IMPACT MEDIUM/HIGH (Status WAIT)
-        const buffer = LIVE_PRICE * 0.0015; // Jarak aman 0.15%
-        const buyStop = LIVE_PRICE + buffer;
-        const sellStop = LIVE_PRICE - buffer;
-        const slDist = buffer * 2.0; // SL 2x jarak buffer
-        const tpDist = buffer * 4.0; // TP 4x jarak buffer (RR 1:2)
+        if (isExpired) {
+            html += `<div class="expired-badge">⏳ Sesi berita telah berakhir. Straddle tidak lagi valid.</div>`;
+            html += `<div class="validity">📡 Harga saat ini: ${f(LIVE_PRICE)}</div>`;
+        } else {
+            const buffer = LIVE_PRICE * 0.0015; // Jarak aman 0.15%
+            const buyStop = LIVE_PRICE + buffer;
+            const sellStop = LIVE_PRICE - buffer;
+            const slDist = buffer * 2.0; // SL 2x jarak buffer
+            const tpDist = buffer * 4.0; // TP 4x jarak buffer (RR 1:2)
 
-        const buySL = buyStop - slDist;
-        const buyTP = buyStop + tpDist;
-        const sellSL = sellStop + slDist;
-        const sellTP = sellStop - tpDist;
+            const buySL = buyStop - slDist;
+            const buyTP = buyStop + tpDist;
+            const sellSL = sellStop + slDist;
+            const sellTP = sellStop - tpDist;
 
-        if (impact >= 3) {
-            html += `<div class="warning-badge">⚠️ HIGH IMPACT NEWS: Spread akan melebar. Gunakan Pending Order!</div>`;
+            if (impact >= 3) {
+                html += `<div class="warning-badge">⚠️ HIGH IMPACT NEWS: Spread akan melebar. Gunakan Pending Order!</div>`;
+            }
+
+            html += `<div class="validity">📡 Harga saat ini: ${f(LIVE_PRICE)} — Siapkan order 5 menit sebelum rilis (${validUntil})</div>`;
+
+            html += `<div class="exec-box">
+                <h5>STRATEGI STRADDLE (OCO)</h5>
+                <div class="exec-grid">
+                    <div class="exec-card buy">
+                        <b>BUY STOP (LONG)</b>
+                        <div class="val">Entry: ${f(buyStop)}</div>
+                        <div class="val" style="color:var(--red)">SL: ${f(buySL)}</div>
+                        <div class="val" style="color:var(--green)">TP: ${f(buyTP)}</div>
+                    </div>
+                    <div class="exec-card sell">
+                        <b>SELL STOP (SHORT)</b>
+                        <div class="val">Entry: ${f(sellStop)}</div>
+                        <div class="val" style="color:var(--red)">SL: ${f(sellSL)}</div>
+                        <div class="val" style="color:var(--green)">TP: ${f(sellTP)}</div>
+                    </div>
+                </div>
+                <div class="oco-note">*OCO: Jika salah satu order tersentuh, batalkan order lainnya.</div>
+            </div>`;
         }
-
-        html += `<div class="validity">📡 Harga saat ini: ${f(LIVE_PRICE)} — Siapkan order 5 menit sebelum rilis (${validUntil})</div>`;
-
-        html += `<div class="exec-box">
-            <h5>STRATEGI STRADDLE (OCO)</h5>
-            <div class="exec-grid">
-                <div class="exec-card buy">
-                    <b>BUY STOP (LONG)</b>
-                    <div class="val">Entry: ${f(buyStop)}</div>
-                    <div class="val" style="color:var(--red)">SL: ${f(buySL)}</div>
-                    <div class="val" style="color:var(--green)">TP: ${f(buyTP)}</div>
-                </div>
-                <div class="exec-card sell">
-                    <b>SELL STOP (SHORT)</b>
-                    <div class="val">Entry: ${f(sellStop)}</div>
-                    <div class="val" style="color:var(--red)">SL: ${f(sellSL)}</div>
-                    <div class="val" style="color:var(--green)">TP: ${f(sellTP)}</div>
-                </div>
-            </div>
-            <div class="oco-note">*OCO: Jika salah satu order tersentuh, batalkan order lainnya.</div>
-        </div>`;
     }
 
     // RENDER FOREX & CRYPTO
@@ -267,6 +277,10 @@ function tpSl(a, e) {
             const dec = isJpyStyle ? 3 : 5;
             
             if (!directed) {
+                if (isExpired) {
+                    html += `<div class="forex-card"><div>${pair} <b>WATCH</b></div><div class="val">Spot: ${rate.toFixed(dec)}</div></div>`;
+                    return;
+                }
                 const buffer = isJpyStyle ? 0.15 : 0.0015;
                 const pipMultiplier = isJpyStyle ? 100 : 10000;
                 html += `<div class="forex-card" style="border-left-color: var(--amber);">
@@ -297,6 +311,10 @@ function tpSl(a, e) {
             const bColor = isBTC ? '#f7931a' : '#627eea';
             
             if (!directed) {
+                if (isExpired) {
+                    html += `<div class="forex-card" style="border-left-color: ${bColor};"><div>${pair} <b>WATCH</b></div><div class="val">Spot: $${fmt(rate)}</div></div>`;
+                    return;
+                }
                 const bufferPct = isBTC ? 0.3 : 0.5;
                 const slPct = bufferPct * 2;
                 const tpPct = bufferPct * 4;
@@ -329,7 +347,7 @@ function card(e) {
     const color = a.dir === 'long' ? 'var(--green)' : a.dir === 'short' ? 'var(--red)' : 'var(--amber)';
     return `<article class="event glass">
         <div class="event-title">
-            <div class="flag">${e.Country==='USD'?'🇺🇸':e.Country==='EUR'?'🇪🇺':e.Country==='GBP'?'🇬🇧':e.Country==='JPY'?'🇯🇵':e.Country==='AUD'?'🇦🇺':e.Country==='NZD'?'🇳🇿':'🌐'}</div>
+            <div class="flag">${e.Country==='USD'?'🇺🇸':e.Country==='EUR'?'🇪🇺':e.Country==='GBP'?'🇬🇧':e.Country==='JPY'?'🇯🇵':e.Country==='AUD'?'🇦🇺':e.Country==='NZD'?'🇳🇿':e.Country==='CAD'?'🇨🇦':'🌐'}</div>
             <div><h4>${esc(e.Event)}</h4><p>${esc(e.Country)} • ${fmtTime(new Date(e.Date))}</p></div>
         </div>
         <div class="metric"><span>Previous</span><b>${esc(e.Previous)}</b></div>
@@ -360,8 +378,11 @@ async function load() {
             const urls = ['https://nfs.faireconomy.media/ff_calendar_thisweek.json', 'https://nfs.faireconomy.media/ff_calendar_nextweek.json'];
             const batches = await Promise.all(urls.map(async u => { const r = await fetch(u, { cache: 'no-store' }); return r.ok ? r.json() : []; }));
             const rank = { Low: 1, Medium: 2, High: 3 };
-            const gold = /fed|fomc|interest rate|inflation|cpi|pce|payroll|employment|unemployment|jobless|gdp|pmi|ism|retail sales|consumer confidence|jolts|durable goods|powell|treasury/i;
-            raw = batches.flat().filter(e => ['USD', 'EUR', 'GBP', 'JPY', 'AUD', 'NZD'].includes(String(e.country || '').toUpperCase()) && gold.test(e.title || '')).map(e => ({
+            // MENAMBAHKAN KEYWORD MINYAK/ENERGI DAN KANADA
+            const keywords = /fed|fomc|interest rate|inflation|cpi|pce|payroll|employment|unemployment|jobless|gdp|pmi|ism|retail sales|consumer confidence|jolts|durable goods|powell|treasury|oil|crude|energy|gas|opec|eia|rig|inventories|distillate|gasoline/i;
+            const allowedCountries = ['USD', 'EUR', 'GBP', 'JPY', 'AUD', 'NZD', 'CAD'];
+            
+            raw = batches.flat().filter(e => allowedCountries.includes(String(e.country || '').toUpperCase()) && keywords.test(e.title || '')).map(e => ({
                 Date: e.date, Event: e.title, Country: e.country, Importance: rank[e.impact] || 1, Forecast: e.forecast || '', Previous: e.previous || '', Actual: e.actual || ''
             }));
         }
@@ -433,6 +454,6 @@ $('#refresh').onclick = () => { load(); loadForex(); loadCrypto(); };
 load(); loadForex(); loadCrypto();
 setInterval(() => { loadForex(); loadCrypto(); }, 60000);
 </script>
-  <script src="scripts/xauusd-price-widget.js?v=20260824-3"></script>
+  <script src="scripts/xauusd-price-widget.js?v=20260824-9"></script>
 </body>
 </html>
