@@ -1,294 +1,308 @@
-{
-  "generatedAt": "2026-10-19T12:58:54.364Z",
-  "source": "Forex Factory / Fair Economy",
-  "events": [
-    {
-      "CalendarId": "GBP-2026-10-20T02:00:00-04:00-Unemployment Rate",
-      "Date": "2026-10-20T02:00:00-04:00",
-      "Country": "GBP",
-      "Event": "Unemployment Rate",
-      "Category": "Economic Calendar",
-      "Actual": "",
-      "Forecast": "4.9%",
-      "Previous": "4.9%",
-      "Importance": 1,
-      "Source": "Forex Factory / Fair Economy"
-    },
-    {
-      "CalendarId": "USD-2026-10-20T08:15:00-04:00-ADP Weekly Employment Change",
-      "Date": "2026-10-20T08:15:00-04:00",
-      "Country": "USD",
-      "Event": "ADP Weekly Employment Change",
-      "Category": "Economic Calendar",
-      "Actual": "",
-      "Forecast": "",
-      "Previous": "24.8K",
-      "Importance": 1,
-      "Source": "Forex Factory / Fair Economy"
-    },
-    {
-      "CalendarId": "GBP-2026-10-21T02:00:00-04:00-CPI y/y",
-      "Date": "2026-10-21T02:00:00-04:00",
-      "Country": "GBP",
-      "Event": "CPI y/y",
-      "Category": "Economic Calendar",
-      "Actual": "",
-      "Forecast": "3.4%",
-      "Previous": "3.1%",
-      "Importance": 3,
-      "Source": "Forex Factory / Fair Economy"
-    },
-    {
-      "CalendarId": "GBP-2026-10-21T02:00:00-04:00-Core CPI y/y",
-      "Date": "2026-10-21T02:00:00-04:00",
-      "Country": "GBP",
-      "Event": "Core CPI y/y",
-      "Category": "Economic Calendar",
-      "Actual": "",
-      "Forecast": "2.8%",
-      "Previous": "2.6%",
-      "Importance": 1,
-      "Source": "Forex Factory / Fair Economy"
-    },
-    {
-      "CalendarId": "NZD-2026-10-21T17:45:00-04:00-CPI q/q",
-      "Date": "2026-10-21T17:45:00-04:00",
-      "Country": "NZD",
-      "Event": "CPI q/q",
-      "Category": "Economic Calendar",
-      "Actual": "",
-      "Forecast": "0.8%",
-      "Previous": "1.5%",
-      "Importance": 3,
-      "Source": "Forex Factory / Fair Economy"
-    },
-    {
-      "CalendarId": "USD-2026-10-22T08:30:00-04:00-Unemployment Claims",
-      "Date": "2026-10-22T08:30:00-04:00",
-      "Country": "USD",
-      "Event": "Unemployment Claims",
-      "Category": "Economic Calendar",
-      "Actual": "",
-      "Forecast": "200K",
-      "Previous": "199K",
-      "Importance": 2,
-      "Source": "Forex Factory / Fair Economy"
-    },
-    {
-      "CalendarId": "EUR-2026-10-22T10:00:00-04:00-Consumer Confidence",
-      "Date": "2026-10-22T10:00:00-04:00",
-      "Country": "EUR",
-      "Event": "Consumer Confidence",
-      "Category": "Economic Calendar",
-      "Actual": "",
-      "Forecast": "-17",
-      "Previous": "-17",
-      "Importance": 1,
-      "Source": "Forex Factory / Fair Economy"
-    },
-    {
-      "CalendarId": "AUD-2026-10-22T18:00:00-04:00-Flash Manufacturing PMI",
-      "Date": "2026-10-22T18:00:00-04:00",
-      "Country": "AUD",
-      "Event": "Flash Manufacturing PMI",
-      "Category": "Economic Calendar",
-      "Actual": "",
-      "Forecast": "",
-      "Previous": "49.3",
-      "Importance": 1,
-      "Source": "Forex Factory / Fair Economy"
-    },
-    {
-      "CalendarId": "AUD-2026-10-22T18:00:00-04:00-Flash Services PMI",
-      "Date": "2026-10-22T18:00:00-04:00",
-      "Country": "AUD",
-      "Event": "Flash Services PMI",
-      "Category": "Economic Calendar",
-      "Actual": "",
-      "Forecast": "",
-      "Previous": "51.4",
-      "Importance": 1,
-      "Source": "Forex Factory / Fair Economy"
-    },
-    {
-      "CalendarId": "GBP-2026-10-22T19:01:00-04:00-GfK Consumer Confidence",
-      "Date": "2026-10-22T19:01:00-04:00",
-      "Country": "GBP",
-      "Event": "GfK Consumer Confidence",
-      "Category": "Economic Calendar",
-      "Actual": "",
-      "Forecast": "-14",
-      "Previous": "-13",
-      "Importance": 1,
-      "Source": "Forex Factory / Fair Economy"
-    },
-    {
-      "CalendarId": "JPY-2026-10-22T19:30:00-04:00-National Core CPI y/y",
-      "Date": "2026-10-22T19:30:00-04:00",
-      "Country": "JPY",
-      "Event": "National Core CPI y/y",
-      "Category": "Economic Calendar",
-      "Actual": "",
-      "Forecast": "2.1%",
-      "Previous": "1.7%",
-      "Importance": 1,
-      "Source": "Forex Factory / Fair Economy"
-    },
-    {
-      "CalendarId": "JPY-2026-10-22T20:30:00-04:00-Flash Manufacturing PMI",
-      "Date": "2026-10-22T20:30:00-04:00",
-      "Country": "JPY",
-      "Event": "Flash Manufacturing PMI",
-      "Category": "Economic Calendar",
-      "Actual": "",
-      "Forecast": "54.5",
-      "Previous": "54.1",
-      "Importance": 1,
-      "Source": "Forex Factory / Fair Economy"
-    },
-    {
-      "CalendarId": "GBP-2026-10-23T02:00:00-04:00-Retail Sales m/m",
-      "Date": "2026-10-23T02:00:00-04:00",
-      "Country": "GBP",
-      "Event": "Retail Sales m/m",
-      "Category": "Economic Calendar",
-      "Actual": "",
-      "Forecast": "-0.2%",
-      "Previous": "0.5%",
-      "Importance": 2,
-      "Source": "Forex Factory / Fair Economy"
-    },
-    {
-      "CalendarId": "EUR-2026-10-23T03:15:00-04:00-French Flash Manufacturing PMI",
-      "Date": "2026-10-23T03:15:00-04:00",
-      "Country": "EUR",
-      "Event": "French Flash Manufacturing PMI",
-      "Category": "Economic Calendar",
-      "Actual": "",
-      "Forecast": "50.6",
-      "Previous": "50.3",
-      "Importance": 2,
-      "Source": "Forex Factory / Fair Economy"
-    },
-    {
-      "CalendarId": "EUR-2026-10-23T03:15:00-04:00-French Flash Services PMI",
-      "Date": "2026-10-23T03:15:00-04:00",
-      "Country": "EUR",
-      "Event": "French Flash Services PMI",
-      "Category": "Economic Calendar",
-      "Actual": "",
-      "Forecast": "50.8",
-      "Previous": "51.4",
-      "Importance": 2,
-      "Source": "Forex Factory / Fair Economy"
-    },
-    {
-      "CalendarId": "EUR-2026-10-23T03:30:00-04:00-German Flash Manufacturing PMI",
-      "Date": "2026-10-23T03:30:00-04:00",
-      "Country": "EUR",
-      "Event": "German Flash Manufacturing PMI",
-      "Category": "Economic Calendar",
-      "Actual": "",
-      "Forecast": "53.5",
-      "Previous": "53.8",
-      "Importance": 2,
-      "Source": "Forex Factory / Fair Economy"
-    },
-    {
-      "CalendarId": "EUR-2026-10-23T03:30:00-04:00-German Flash Services PMI",
-      "Date": "2026-10-23T03:30:00-04:00",
-      "Country": "EUR",
-      "Event": "German Flash Services PMI",
-      "Category": "Economic Calendar",
-      "Actual": "",
-      "Forecast": "52.6",
-      "Previous": "52.9",
-      "Importance": 2,
-      "Source": "Forex Factory / Fair Economy"
-    },
-    {
-      "CalendarId": "EUR-2026-10-23T04:00:00-04:00-Flash Manufacturing PMI",
-      "Date": "2026-10-23T04:00:00-04:00",
-      "Country": "EUR",
-      "Event": "Flash Manufacturing PMI",
-      "Category": "Economic Calendar",
-      "Actual": "",
-      "Forecast": "52.7",
-      "Previous": "52.7",
-      "Importance": 1,
-      "Source": "Forex Factory / Fair Economy"
-    },
-    {
-      "CalendarId": "EUR-2026-10-23T04:00:00-04:00-Flash Services PMI",
-      "Date": "2026-10-23T04:00:00-04:00",
-      "Country": "EUR",
-      "Event": "Flash Services PMI",
-      "Category": "Economic Calendar",
-      "Actual": "",
-      "Forecast": "52.6",
-      "Previous": "53.0",
-      "Importance": 1,
-      "Source": "Forex Factory / Fair Economy"
-    },
-    {
-      "CalendarId": "GBP-2026-10-23T04:30:00-04:00-Flash Manufacturing PMI",
-      "Date": "2026-10-23T04:30:00-04:00",
-      "Country": "GBP",
-      "Event": "Flash Manufacturing PMI",
-      "Category": "Economic Calendar",
-      "Actual": "",
-      "Forecast": "51.8",
-      "Previous": "52.0",
-      "Importance": 2,
-      "Source": "Forex Factory / Fair Economy"
-    },
-    {
-      "CalendarId": "GBP-2026-10-23T04:30:00-04:00-Flash Services PMI",
-      "Date": "2026-10-23T04:30:00-04:00",
-      "Country": "GBP",
-      "Event": "Flash Services PMI",
-      "Category": "Economic Calendar",
-      "Actual": "",
-      "Forecast": "51.8",
-      "Previous": "51.7",
-      "Importance": 2,
-      "Source": "Forex Factory / Fair Economy"
-    },
-    {
-      "CalendarId": "USD-2026-10-23T09:45:00-04:00-Flash Manufacturing PMI",
-      "Date": "2026-10-23T09:45:00-04:00",
-      "Country": "USD",
-      "Event": "Flash Manufacturing PMI",
-      "Category": "Economic Calendar",
-      "Actual": "",
-      "Forecast": "55.5",
-      "Previous": "57.0",
-      "Importance": 2,
-      "Source": "Forex Factory / Fair Economy"
-    },
-    {
-      "CalendarId": "USD-2026-10-23T09:45:00-04:00-Flash Services PMI",
-      "Date": "2026-10-23T09:45:00-04:00",
-      "Country": "USD",
-      "Event": "Flash Services PMI",
-      "Category": "Economic Calendar",
-      "Actual": "",
-      "Forecast": "58.0",
-      "Previous": "58.7",
-      "Importance": 2,
-      "Source": "Forex Factory / Fair Economy"
-    },
-    {
-      "CalendarId": "USD-2026-10-23T10:00:00-04:00-Revised UoM Inflation Expectations",
-      "Date": "2026-10-23T10:00:00-04:00",
-      "Country": "USD",
-      "Event": "Revised UoM Inflation Expectations",
-      "Category": "Economic Calendar",
-      "Actual": "",
-      "Forecast": "",
-      "Previous": "4.7%",
-      "Importance": 2,
-      "Source": "Forex Factory / Fair Economy"
-    }
-  ]
-}
+[
+  {
+    "Date": "2026-10-18T19:01:00-04:00",
+    "Event": "Rightmove HPI m/m",
+    "Country": "GBP",
+    "Importance": 1,
+    "Forecast": "",
+    "Previous": "0.7%",
+    "Actual": ""
+  },
+  {
+    "Date": "2026-10-19T08:30:00-04:00",
+    "Event": "CPI m/m",
+    "Country": "CAD",
+    "Importance": 3,
+    "Forecast": "0.2%",
+    "Previous": "-0.1%",
+    "Actual": ""
+  },
+  {
+    "Date": "2026-10-19T08:30:00-04:00",
+    "Event": "Median CPI y/y",
+    "Country": "CAD",
+    "Importance": 3,
+    "Forecast": "2.0%",
+    "Previous": "2.0%",
+    "Actual": ""
+  },
+  {
+    "Date": "2026-10-19T08:30:00-04:00",
+    "Event": "Trimmed CPI y/y",
+    "Country": "CAD",
+    "Importance": 3,
+    "Forecast": "1.9%",
+    "Previous": "1.9%",
+    "Actual": ""
+  },
+  {
+    "Date": "2026-10-19T08:30:00-04:00",
+    "Event": "Common CPI y/y",
+    "Country": "CAD",
+    "Importance": 2,
+    "Forecast": "2.6%",
+    "Previous": "2.6%",
+    "Actual": ""
+  },
+  {
+    "Date": "2026-10-19T08:30:00-04:00",
+    "Event": "Core CPI m/m",
+    "Country": "CAD",
+    "Importance": 1,
+    "Forecast": "",
+    "Previous": "0.1%",
+    "Actual": ""
+  },
+  {
+    "Date": "2026-10-20T02:00:00-04:00",
+    "Event": "Unemployment Rate",
+    "Country": "GBP",
+    "Importance": 1,
+    "Forecast": "4.9%",
+    "Previous": "4.9%",
+    "Actual": ""
+  },
+  {
+    "Date": "2026-10-20T08:15:00-04:00",
+    "Event": "ADP Weekly Employment Change",
+    "Country": "USD",
+    "Importance": 1,
+    "Forecast": "",
+    "Previous": "24.8K",
+    "Actual": ""
+  },
+  {
+    "Date": "2026-10-21T02:00:00-04:00",
+    "Event": "CPI y/y",
+    "Country": "GBP",
+    "Importance": 3,
+    "Forecast": "3.4%",
+    "Previous": "3.1%",
+    "Actual": ""
+  },
+  {
+    "Date": "2026-10-21T02:00:00-04:00",
+    "Event": "Core CPI y/y",
+    "Country": "GBP",
+    "Importance": 1,
+    "Forecast": "2.8%",
+    "Previous": "2.6%",
+    "Actual": ""
+  },
+  {
+    "Date": "2026-10-21T10:30:00-04:00",
+    "Event": "Crude Oil Inventories",
+    "Country": "USD",
+    "Importance": 1,
+    "Forecast": "",
+    "Previous": "-8.6M",
+    "Actual": ""
+  },
+  {
+    "Date": "2026-10-21T17:45:00-04:00",
+    "Event": "CPI q/q",
+    "Country": "NZD",
+    "Importance": 3,
+    "Forecast": "0.8%",
+    "Previous": "1.5%",
+    "Actual": ""
+  },
+  {
+    "Date": "2026-10-22T08:30:00-04:00",
+    "Event": "Unemployment Claims",
+    "Country": "USD",
+    "Importance": 2,
+    "Forecast": "200K",
+    "Previous": "199K",
+    "Actual": ""
+  },
+  {
+    "Date": "2026-10-22T10:00:00-04:00",
+    "Event": "Consumer Confidence",
+    "Country": "EUR",
+    "Importance": 1,
+    "Forecast": "-17",
+    "Previous": "-17",
+    "Actual": ""
+  },
+  {
+    "Date": "2026-10-22T10:30:00-04:00",
+    "Event": "Natural Gas Storage",
+    "Country": "USD",
+    "Importance": 1,
+    "Forecast": "",
+    "Previous": "67B",
+    "Actual": ""
+  },
+  {
+    "Date": "2026-10-22T18:00:00-04:00",
+    "Event": "Flash Manufacturing PMI",
+    "Country": "AUD",
+    "Importance": 1,
+    "Forecast": "",
+    "Previous": "49.3",
+    "Actual": ""
+  },
+  {
+    "Date": "2026-10-22T18:00:00-04:00",
+    "Event": "Flash Services PMI",
+    "Country": "AUD",
+    "Importance": 1,
+    "Forecast": "",
+    "Previous": "51.4",
+    "Actual": ""
+  },
+  {
+    "Date": "2026-10-22T19:01:00-04:00",
+    "Event": "GfK Consumer Confidence",
+    "Country": "GBP",
+    "Importance": 1,
+    "Forecast": "-14",
+    "Previous": "-13",
+    "Actual": ""
+  },
+  {
+    "Date": "2026-10-22T19:30:00-04:00",
+    "Event": "National Core CPI y/y",
+    "Country": "JPY",
+    "Importance": 1,
+    "Forecast": "2.1%",
+    "Previous": "1.7%",
+    "Actual": ""
+  },
+  {
+    "Date": "2026-10-22T20:30:00-04:00",
+    "Event": "Flash Manufacturing PMI",
+    "Country": "JPY",
+    "Importance": 1,
+    "Forecast": "54.5",
+    "Previous": "54.1",
+    "Actual": ""
+  },
+  {
+    "Date": "2026-10-23T02:00:00-04:00",
+    "Event": "Retail Sales m/m",
+    "Country": "GBP",
+    "Importance": 2,
+    "Forecast": "-0.2%",
+    "Previous": "0.5%",
+    "Actual": ""
+  },
+  {
+    "Date": "2026-10-23T03:15:00-04:00",
+    "Event": "French Flash Manufacturing PMI",
+    "Country": "EUR",
+    "Importance": 2,
+    "Forecast": "50.6",
+    "Previous": "50.3",
+    "Actual": ""
+  },
+  {
+    "Date": "2026-10-23T03:15:00-04:00",
+    "Event": "French Flash Services PMI",
+    "Country": "EUR",
+    "Importance": 2,
+    "Forecast": "50.8",
+    "Previous": "51.4",
+    "Actual": ""
+  },
+  {
+    "Date": "2026-10-23T03:30:00-04:00",
+    "Event": "German Flash Manufacturing PMI",
+    "Country": "EUR",
+    "Importance": 2,
+    "Forecast": "53.5",
+    "Previous": "53.8",
+    "Actual": ""
+  },
+  {
+    "Date": "2026-10-23T03:30:00-04:00",
+    "Event": "German Flash Services PMI",
+    "Country": "EUR",
+    "Importance": 2,
+    "Forecast": "52.6",
+    "Previous": "52.9",
+    "Actual": ""
+  },
+  {
+    "Date": "2026-10-23T04:00:00-04:00",
+    "Event": "Flash Manufacturing PMI",
+    "Country": "EUR",
+    "Importance": 1,
+    "Forecast": "52.7",
+    "Previous": "52.7",
+    "Actual": ""
+  },
+  {
+    "Date": "2026-10-23T04:00:00-04:00",
+    "Event": "Flash Services PMI",
+    "Country": "EUR",
+    "Importance": 1,
+    "Forecast": "52.6",
+    "Previous": "53.0",
+    "Actual": ""
+  },
+  {
+    "Date": "2026-10-23T04:30:00-04:00",
+    "Event": "Flash Manufacturing PMI",
+    "Country": "GBP",
+    "Importance": 2,
+    "Forecast": "51.8",
+    "Previous": "52.0",
+    "Actual": ""
+  },
+  {
+    "Date": "2026-10-23T04:30:00-04:00",
+    "Event": "Flash Services PMI",
+    "Country": "GBP",
+    "Importance": 2,
+    "Forecast": "51.8",
+    "Previous": "51.7",
+    "Actual": ""
+  },
+  {
+    "Date": "2026-10-23T08:30:00-04:00",
+    "Event": "Core Retail Sales m/m",
+    "Country": "CAD",
+    "Importance": 1,
+    "Forecast": "1.1%",
+    "Previous": "-0.7%",
+    "Actual": ""
+  },
+  {
+    "Date": "2026-10-23T08:30:00-04:00",
+    "Event": "Retail Sales m/m",
+    "Country": "CAD",
+    "Importance": 1,
+    "Forecast": "1.3%",
+    "Previous": "-0.7%",
+    "Actual": ""
+  },
+  {
+    "Date": "2026-10-23T09:45:00-04:00",
+    "Event": "Flash Manufacturing PMI",
+    "Country": "USD",
+    "Importance": 2,
+    "Forecast": "55.5",
+    "Previous": "57.0",
+    "Actual": ""
+  },
+  {
+    "Date": "2026-10-23T09:45:00-04:00",
+    "Event": "Flash Services PMI",
+    "Country": "USD",
+    "Importance": 2,
+    "Forecast": "58.0",
+    "Previous": "58.7",
+    "Actual": ""
+  },
+  {
+    "Date": "2026-10-23T10:00:00-04:00",
+    "Event": "Revised UoM Inflation Expectations",
+    "Country": "USD",
+    "Importance": 2,
+    "Forecast": "",
+    "Previous": "4.7%",
+    "Actual": ""
+  }
+]
