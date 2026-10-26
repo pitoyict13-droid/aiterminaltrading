@@ -13,7 +13,7 @@
     "Event": "Spanish Unemployment Rate",
     "Country": "EUR",
     "Importance": 1,
-    "Forecast": "",
+    "Forecast": "9.8%",
     "Previous": "9.9%",
     "Actual": ""
   },
@@ -49,7 +49,7 @@
     "Event": "CB Consumer Confidence",
     "Country": "USD",
     "Importance": 2,
-    "Forecast": "80.5",
+    "Forecast": "80.7",
     "Previous": "81.9",
     "Actual": ""
   },
