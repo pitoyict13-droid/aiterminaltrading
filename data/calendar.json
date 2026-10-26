@@ -13,7 +13,7 @@
     "Event": "Spanish Unemployment Rate",
     "Country": "EUR",
     "Importance": 1,
-    "Forecast": "9.8%",
+    "Forecast": "9.9%",
     "Previous": "9.9%",
     "Actual": ""
   },
@@ -40,7 +40,7 @@
     "Event": "Durable Goods Orders m/m",
     "Country": "USD",
     "Importance": 1,
-    "Forecast": "1.8%",
+    "Forecast": "2.0%",
     "Previous": "0.0%",
     "Actual": ""
   },
@@ -49,7 +49,7 @@
     "Event": "CB Consumer Confidence",
     "Country": "USD",
     "Importance": 2,
-    "Forecast": "80.7",
+    "Forecast": "81.2",
     "Previous": "81.9",
     "Actual": ""
   },
@@ -85,7 +85,7 @@
     "Event": "Prelim Wholesale Inventories m/m",
     "Country": "USD",
     "Importance": 1,
-    "Forecast": "0.4%",
+    "Forecast": "0.5%",
     "Previous": "0.7%",
     "Actual": ""
   },
@@ -166,7 +166,7 @@
     "Event": "Advance GDP Price Index q/q",
     "Country": "USD",
     "Importance": 2,
-    "Forecast": "3.5%",
+    "Forecast": "3.3%",
     "Previous": "6.2%",
     "Actual": ""
   },
@@ -211,17 +211,8 @@
     "Event": "Retail Sales y/y",
     "Country": "JPY",
     "Importance": 1,
-    "Forecast": "3.4%",
+    "Forecast": "3.3%",
     "Previous": "2.7%",
-    "Actual": ""
-  },
-  {
-    "Date": "2026-10-30T02:29:00-04:00",
-    "Event": "German Prelim CPI m/m",
-    "Country": "EUR",
-    "Importance": 2,
-    "Forecast": "0.1%",
-    "Previous": "0.6%",
     "Actual": ""
   },
   {
@@ -231,6 +222,15 @@
     "Importance": 1,
     "Forecast": "0.1%",
     "Previous": "0.2%",
+    "Actual": ""
+  },
+  {
+    "Date": "2026-10-30T03:29:00-04:00",
+    "Event": "German Prelim CPI m/m",
+    "Country": "EUR",
+    "Importance": 2,
+    "Forecast": "0.1%",
+    "Previous": "0.6%",
     "Actual": ""
   },
   {
@@ -301,7 +301,7 @@
     "Event": "Italian Prelim CPI m/m",
     "Country": "EUR",
     "Importance": 1,
-    "Forecast": "0.0%",
+    "Forecast": "0.1%",
     "Previous": "0.7%",
     "Actual": ""
   },
@@ -346,7 +346,7 @@
     "Event": "Chicago PMI",
     "Country": "USD",
     "Importance": 1,
-    "Forecast": "54.8",
+    "Forecast": "55.8",
     "Previous": "58.8",
     "Actual": ""
   },
