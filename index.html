@@ -857,7 +857,7 @@ function card(e) {
     const signalNote = a.dir === 'wait' && momentum
         ? `post-news ${momentum.changePct >= 0 ? '+' : ''}${momentum.changePct.toFixed(2)}% (${focus.pair})`
         : a.dir === 'wait' && preBias
-            ? `pre-news bias • Forecast ${preBias.forecast} vs Previous ${preBias.previous}`
+            ? `pre-news bias${preBias.source ? ' • ' + preBias.source : ''} • Forecast ${preBias.forecast} vs Previous ${preBias.previous}`
             : `${a.score}% confidence`;
     const reason = phase === 'post' && a.dir === 'wait'
         ? `${a.reason} Sinyal BUY/SELL pasca-rilis memakai momentum ${focus.pair || 'pair terkait'} terhadap harga pra-rilisnya; bila arah belum jelas, level breakout dua arah ditampilkan.`
