@@ -159,7 +159,6 @@ def collect_quotes(mt5, now: datetime) -> dict:
 def build_payload(mt5, now: datetime | None = None) -> dict:
     now = now or utc_now()
     account = mt5.account_info()
-    terminal = mt5.terminal_info()
     if account is None:
         raise RuntimeError(f"account_info() failed: {mt5.last_error()}")
 
@@ -173,16 +172,16 @@ def build_payload(mt5, now: datetime | None = None) -> dict:
     return {
         "generatedAt": iso(now),
         "source": "MT5 local bridge",
+        # Keep the public payload minimal: broker family and demo/real status,
+        # not the user's installed terminal or live server name.
         "broker": {
             "id": biz,
-            "name": company or biz,
-            "server": server,
+            "name": biz,
             "accountType": account_type(getattr(account, "trade_mode", None)),
-            "terminal": getattr(terminal, "name", "") if terminal is not None else "",
         },
         "quotes": q,
         "providers": {
-            biz: {"name": company or biz, "status": "ok", "pairs": len(q)}
+            biz: {"name": biz, "status": "ok", "pairs": len(q)}
         },
         "staleAfterSec": STALE_AFTER_SEC,
     }

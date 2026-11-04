@@ -46,7 +46,7 @@ GitHub Actions cannot reach your PC, so the exact broker quote is exported by `s
 
 The scheduled task is `aiterminaltrading-broker-quotes`; it runs only while the user is logged on and MT5 is open. Log: `bridge\broker-quotes.log`.
 
-`data/forex-broker.json` shape: `{ generatedAt, source, broker: { id, name, server, accountType, terminal }, quotes: { "EUR/USD": { bid, ask, mid, spread, spreadPips, digits, symbol, brokerTime } }, providers }`. `brokerTime` is the broker server clock; UI freshness uses `generatedAt`. When the file is at most 30 minutes old, the board shows the broker bid/ask and uses **ask for BUY** / **bid for SELL**. Older quotes are shown as STALE and the OANDA mid is used instead.
+`data/forex-broker.json` is intentionally minimal. It shape is `{ generatedAt, source, broker: { id, name, accountType }, quotes: { "EUR/USD": { bid, ask, mid, spread, spreadPips, digits, symbol, brokerTime } }, providers }`. The public file does **not** contain login, balance, equity, password, server name or terminal installation. `brokerTime` is the broker server clock; UI freshness uses `generatedAt`. When the file is at most 30 minutes old, the board shows the broker bid/ask and uses **ask for BUY** / **bid for SELL**. Older quotes are shown as STALE and the OANDA mid is used instead.
 
 
 Event cards also show the pre-news market bias for affected forex majors, crosses and indices, and the card's signal badge changes from WAIT to BUY/SELL. This is an execution scenario, not a guarantee: wait for the release if the forecast edge is flat.

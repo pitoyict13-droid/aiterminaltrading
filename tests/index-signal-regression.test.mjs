@@ -382,14 +382,14 @@ const brokerQuoteForFn = extractFunction('brokerQuoteFor');
 const brokerQuoteFor = new Function('FOREX_BROKER', 'BROKER_QUOTE_MAX_AGE_MS', `${brokerQuoteForFn}\nreturn brokerQuoteFor;`);
 const brokerPayload = {
   generatedAt: '2026-11-04T00:40:00Z',
-  broker: { id: 'FBS', name: 'FBS Markets Inc.', server: 'FBS-Demo', accountType: 'demo' },
+  broker: { id: 'FBS', name: 'FBS', accountType: 'demo' },
   quotes: { 'EUR/USD': { bid: 1.2001, ask: 1.2003, spreadPips: 2 } }
 };
 const freshBroker = brokerQuoteFor(brokerPayload, 30 * 60 * 1000)('EUR/USD', Date.parse('2026-11-04T00:55:00Z'));
 assert.equal(freshBroker.ask, 1.2003);
 assert.equal(freshBroker.stale, false);
 assert.equal(freshBroker.accountType, 'demo');
-assert.equal(freshBroker.brokerName, 'FBS Markets Inc.');
+assert.equal(freshBroker.brokerName, 'FBS');
 assert.ok(Math.abs(freshBroker.ageMin - 15) < 1e-9);
 const staleBroker = brokerQuoteFor(brokerPayload, 30 * 60 * 1000)('EUR/USD', Date.parse('2026-11-04T01:20:00Z'));
 assert.equal(staleBroker.stale, true);
@@ -403,7 +403,7 @@ assert.equal(brokerQuoteFor({}, 30 * 60 * 1000)('EUR/USD', Date.now()), null);
 
 const brokerSourceTextFn = extractFunction('brokerSourceText');
 const brokerSourceText = new Function('FOREX_BROKER', 'BROKER_QUOTE_MAX_AGE_MS', `${brokerSourceTextFn}\nreturn brokerSourceText;`)(brokerPayload, 30 * 60 * 1000);
-assert.match(brokerSourceText(Date.parse('2026-11-04T00:55:00Z')), /Quote broker FBS Markets Inc\. FBS-Demo \(demo\) fresh 15 mnt/);
+assert.match(brokerSourceText(Date.parse('2026-11-04T00:55:00Z')), /Quote broker FBS \(demo\) fresh 15 mnt/);
 assert.match(brokerSourceText(Date.parse('2026-11-04T01:20:00Z')), /stale 40 mnt/);
 
 console.log('Passed global forex board tests');

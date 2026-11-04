@@ -101,9 +101,11 @@ def test_payload_shape_and_no_credentials():
     payload = mt5_quotes.build_payload(mt5, now)
 
     assert payload["source"] == "MT5 local bridge"
-    assert payload["broker"]["id"] == "FBS"
-    assert payload["broker"]["accountType"] == "demo"
-    assert payload["broker"]["server"] == "FBS-Demo"
+    broker = payload["broker"]
+    assert broker["id"] == "FBS"
+    assert broker["name"] == "FBS"
+    assert broker["accountType"] == "demo"
+    assert set(broker) == {"id", "name", "accountType"}, "public broker payload must stay minimal"
     assert payload["providers"]["FBS"]["status"] == "ok"
     assert len(payload["quotes"]) == 8
 
@@ -120,7 +122,8 @@ def test_payload_shape_and_no_credentials():
     assert jpy["spreadPips"] == 1.8
 
     serialized = json.dumps(payload)
-    for secret in ("12345678", "5000.25", "5001.75", "login", "balance", "equity", "password"):
+    for secret in ("12345678", "5000.25", "5001.75", "login", "balance", "equity", "password",
+                   "FBS-Demo", "MetaTrader 5 EXNESS", "FBS Markets Inc."):
         assert secret not in serialized, f"sensitive field leaked: {secret}"
 
 
