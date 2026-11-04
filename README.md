@@ -52,6 +52,21 @@ The scheduled task is `aiterminaltrading-broker-quotes`; it runs only while the 
 
 `data/forex-broker.json` is intentionally minimal. It shape is `{ generatedAt, source, broker: { id, name, accountType }, quotes: { "EUR/USD": { bid, ask, mid, spread, spreadPips, digits, symbol, brokerTime } }, providers }`. The public file does **not** contain login, balance, equity, password, server name or terminal installation. `brokerTime` is the broker server clock; UI freshness uses `generatedAt`. When the file is at most 30 minutes old, the board shows the broker bid/ask and uses **ask for BUY** / **bid for SELL**. Older quotes are shown as STALE and the OANDA mid is used instead.
 
+### Local scheduled market-data refresh
+
+The scheduled GitHub Actions workflow is the normal updater, but it can be idle or delayed. To keep the Sniper bridge from serving stale data while this Windows PC is on, run the local publisher:
+
+    install-market-data-task.bat
+
+This creates the scheduled task `aiterminaltrading-market-data`, which runs `publish-market-data.bat` every 15 minutes:
+
+1. `node scripts/fetch-calendar.mjs`
+2. stage only the generated market/calendar files
+3. skip commit when nothing changed
+4. commit, pull/rebase, and push the fresh data
+
+Log: `bridge\market-data.log`. The task runs only while the user is logged on and the PC has internet access. It does not use broker credentials and does not place orders.
+
 
 Event cards also show the pre-news market bias for affected forex majors, crosses and indices, and the card's signal badge changes from WAIT to BUY/SELL. This is an execution scenario, not a guarantee: wait for the release if the forecast edge is flat.
 
