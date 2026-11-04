@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {
   buildForexPayload,
+  buildMarketPayload,
   parseTradingViewForex,
   ratesFromQuotes,
   FOREX_FEEDS
@@ -81,5 +82,46 @@ const rates = ratesFromQuotes({
 assert.equal(rates.GBP, 0.8);
 assert.equal(rates.CHF, 0.8);
 assert.equal(rates.JPY, undefined, 'cross rates must not be invented');
+
+const yahooByPair = {
+  'EUR/USD': { bars: [{ k: 100, o: 1.1, h: 1.2, l: 1.0, c: 1.15 }], meta: { regularMarketPrice: 1.13, previousClose: 1.1, regularMarketChangePercent: 2.7 } },
+  'XAU/USD': { bars: [{ k: 200, o: 3900, h: 4010, l: 3890, c: 4000 }], meta: { regularMarketPrice: 4015, previousClose: 4000, regularMarketChangePercent: 0.4 } },
+  'NZD/USD': { bars: [{ k: 300, o: 0.56, h: 0.57, l: 0.55, c: 0.565 }], meta: { regularMarketPrice: 0.565, previousClose: 0.55, regularMarketChangePercent: 2.7 } }
+};
+const markets = buildMarketPayload({
+  price: 3990,
+  forex: {
+    'EUR/USD': { price: 1.12, source: 'OANDA', changePct: 0.25 },
+    'NZD/USD': { price: 0.561, source: 'OANDA', changePct: -0.1 },
+    'GBP/JPY': { price: 212.8, source: 'OANDA', changePct: null }
+  },
+  crypto: { source: 'Binance', rates: { 'BTC/USD': 77000, 'ETH/USD': 2200 } },
+  yahooByPair,
+  now: new Date('2026-11-04T06:30:00Z')
+});
+assert.equal(markets.staleAfterSec, 1800);
+assert.equal(markets.anchor, 'aiterminaltrading');
+assert.equal(markets.pairs['EUR/USD'].price, 1.12, 'OANDA quote must win');
+assert.equal(markets.pairs['EUR/USD'].source, 'OANDA');
+assert.equal(markets.pairs['EUR/USD'].bars.length, 1);
+assert.equal(markets.pairs['NZD/USD'].price, 0.561);
+assert.equal(markets.pairs['XAU/USD'].price, 3990);
+assert.equal(markets.pairs['XAU/USD'].source, 'gold-api');
+assert.equal(markets.pairs['BTC/USD'].price, 77000);
+assert.equal(markets.pairs['ETH/USD'].price, 2200);
+assert.equal(markets.pairs['GBP/JPY'].price, 212.8);
+
+// When the primary quote is missing, Yahoo's current price must be used.
+const yahooFallback = buildMarketPayload({
+  price: null,
+  forex: {},
+  crypto: null,
+  yahooByPair: {
+    'EUR/USD': { bars: [{ k: 400, o: 1, h: 1.1, l: 0.9, c: 1.05 }], meta: { regularMarketPrice: 1.07, previousClose: 1.02, regularMarketChangePercent: 4.9 } }
+  },
+  now: new Date('2026-11-04T06:30:00Z')
+});
+assert.equal(yahooFallback.pairs['EUR/USD'].price, 1.07);
+assert.equal(yahooFallback.pairs['EUR/USD'].source, 'Yahoo Finance');
 
 console.log('Passed forex live-source tests');

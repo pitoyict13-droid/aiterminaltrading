@@ -25,6 +25,7 @@ PAIRS = {
     "USD/CHF": (0.81800, 0.81809),
     "AUD/USD": (0.69600, 0.69610),
     "USD/CAD": (1.39900, 1.39911),
+    "NZD/USD": (0.56000, 0.56011),
     "GBP/JPY": (212.700, 212.716),
     "EUR/JPY": (177.600, 177.614),
 }
@@ -107,7 +108,7 @@ def test_payload_shape_and_no_credentials():
     assert broker["accountType"] == "demo"
     assert set(broker) == {"id", "name", "accountType"}, "public broker payload must stay minimal"
     assert payload["providers"]["FBS"]["status"] == "ok"
-    assert len(payload["quotes"]) == 8
+    assert len(payload["quotes"]) == 9
 
     eur = payload["quotes"]["EUR/USD"]
     assert eur["symbol"] == "EURUSD.r", "suffix symbols must resolve"

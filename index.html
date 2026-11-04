@@ -141,7 +141,7 @@
     <div>
       <div class="eyebrow">Forex watch</div>
       <h3>Forex Majors &amp; JPY Crosses</h3>
-      <p>Pre-news market entry bias for EUR/USD, GBP/USD, USD/JPY, USD/CHF, AUD/USD, USD/CAD, GBP/JPY and EUR/JPY. Prices use the live OANDA feed (TradingView) with a multi-broker cross-check. When the local MT5 bridge is running, the exact broker bid/ask is shown and used for the entry side (ask for BUY, bid for SELL). BUY/SELL comes from Forecast vs Previous on the next medium/high-impact event; it is a scenario, not a prediction.</p>
+      <p>Pre-news market entry bias for EUR/USD, GBP/USD, USD/JPY, USD/CHF, AUD/USD, USD/CAD, NZD/USD, GBP/JPY and EUR/JPY. Prices use the live OANDA feed (TradingView) with a multi-broker cross-check. When the local MT5 bridge is running, the exact broker bid/ask is shown and used for the entry side (ask for BUY, bid for SELL). BUY/SELL comes from Forecast vs Previous on the next medium/high-impact event; it is a scenario, not a prediction.</p>
     </div>
     <div class="fx-grid" id="fxGrid"></div>
   </section>
@@ -179,7 +179,7 @@ function countryCode(c) {
     return ({ 'UNITED STATES': 'USD', US: 'USD', USA: 'USD', CANADA: 'CAD', CA: 'CAD', EUROZONE: 'EUR', 'EURO AREA': 'EUR', UK: 'GBP', 'UNITED KINGDOM': 'GBP', JAPAN: 'JPY', AUSTRALIA: 'AUD', 'NEW ZEALAND': 'NZD' }[u] || u);
 }
 const WITA = 'Asia/Makassar';
-const FOREX_MAJORS = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CHF', 'AUD/USD', 'USD/CAD'];
+const FOREX_MAJORS = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CHF', 'AUD/USD', 'USD/CAD', 'NZD/USD'];
 const FOREX_CROSSES = ['GBP/JPY', 'EUR/JPY'];
 const FOREX_PAIRS = [...FOREX_MAJORS, ...FOREX_CROSSES];
 const INDICES = [

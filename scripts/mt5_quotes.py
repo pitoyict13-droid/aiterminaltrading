@@ -33,6 +33,7 @@ PAIR_SYMBOLS = {
     "USD/CHF": "USDCHF",
     "AUD/USD": "AUDUSD",
     "USD/CAD": "USDCAD",
+    "NZD/USD": "NZDUSD",
     "GBP/JPY": "GBPJPY",
     "EUR/JPY": "EURJPY",
 }

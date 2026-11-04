@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url';
 const PRE_NEWS_FILE = 'data/prenews.json';
 const PRE_NEWS_HOLD_MS = 7 * 24 * 60 * 60 * 1000;
 const PRE_NEWS_WINDOW_MS = 2 * 60 * 60 * 1000;
-const FOREX_SYMBOLS = ['EUR', 'GBP', 'JPY', 'CHF', 'AUD', 'CAD'];
+const FOREX_SYMBOLS = ['EUR', 'GBP', 'JPY', 'CHF', 'AUD', 'CAD', 'NZD'];
 const FOREX_PAIRS = [
   ['EUR/USD', 'EURUSD'],
   ['GBP/USD', 'GBPUSD'],
@@ -12,6 +12,7 @@ const FOREX_PAIRS = [
   ['USD/CHF', 'USDCHF'],
   ['AUD/USD', 'AUDUSD'],
   ['USD/CAD', 'USDCAD'],
+  ['NZD/USD', 'NZDUSD'],
   ['GBP/JPY', 'GBPJPY'],
   ['EUR/JPY', 'EURJPY']
 ];
@@ -93,6 +94,15 @@ async function readPreNews() {
   }
 }
 
+async function readCalendar() {
+  try {
+    const raw = JSON.parse(await fs.readFile('data/calendar.json', 'utf8'));
+    return Array.isArray(raw) ? raw : (Array.isArray(raw && raw.events) ? raw.events : []);
+  } catch {
+    return [];
+  }
+}
+
 // 1. AMBIL DATA KALENDER (ForexFactory)
 async function fetchCalendar() {
   const urls = [
@@ -125,6 +135,10 @@ async function fetchCalendar() {
       Actual: e.actual || ''
     }));
 
+  if (!events.length) {
+    console.error('ForexFactory mengembalikan 0 berita; calendar.json lama dipertahankan.');
+    return readCalendar();
+  }
   await fs.writeFile('data/calendar.json', JSON.stringify(events, null, 2));
   console.log('Berhasil menyimpan calendar.json dengan', events.length, 'berita.');
   return events;
@@ -315,27 +329,45 @@ async function fetchForex() {
 }
 
 async function fetchCrypto() {
-  try {
-    const r = await fetch('https://api.binance.com/api/v3/ticker/price?symbols=["BTCUSDT","ETHUSDT"]');
-    const j = await r.json();
-    if (Array.isArray(j)) {
-      const btc = j.find(x => x.symbol === 'BTCUSDT');
-      const eth = j.find(x => x.symbol === 'ETHUSDT');
-      const out = { 'BTC/USD': Number(btc && btc.price), 'ETH/USD': Number(eth && eth.price) };
-      if (out['BTC/USD'] > 0 && out['ETH/USD'] > 0) return out;
+  const sources = [
+    {
+      name: 'Binance',
+      url: 'https://api.binance.com/api/v3/ticker/price?symbols=["BTCUSDT","ETHUSDT"]',
+      parse(j, sourceName) {
+        if (!Array.isArray(j)) return null;
+        const btc = j.find(x => x.symbol === 'BTCUSDT');
+        const eth = j.find(x => x.symbol === 'ETHUSDT');
+        return valid({ 'BTC/USD': Number(btc && btc.price), 'ETH/USD': Number(eth && eth.price) }, sourceName);
+      }
+    },
+    {
+      name: 'CoinGecko',
+      url: 'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd',
+      parse(j, sourceName) {
+        return valid({ 'BTC/USD': Number(j && j.bitcoin && j.bitcoin.usd), 'ETH/USD': Number(j && j.ethereum && j.ethereum.usd) }, sourceName);
+      }
     }
-  } catch (e) {
-    console.error('Binance crypto gagal', e);
-  }
-  try {
-    const r = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd');
-    const j = await r.json();
-    const out = { 'BTC/USD': Number(j.bitcoin && j.bitcoin.usd), 'ETH/USD': Number(j.ethereum && j.ethereum.usd) };
-    if (out['BTC/USD'] > 0 && out['ETH/USD'] > 0) return out;
-  } catch (e) {
-    console.error('CoinGecko crypto gagal', e);
+  ];
+  for (const source of sources) {
+    try {
+      const r = await fetch(source.url, { headers: { 'user-agent': 'Mozilla/5.0' } });
+      const j = await r.json();
+      const parsed = source.parse(j, source.name);
+      if (parsed && parsed.rates) return parsed;
+    } catch (e) {
+      console.error(source.name + ' crypto gagal', e);
+    }
   }
   return null;
+
+  function valid(out, sourceName) {
+    const rates = {
+      'BTC/USD': Number(out && out['BTC/USD']),
+      'ETH/USD': Number(out && out['ETH/USD'])
+    };
+    if (!(rates['BTC/USD'] > 0 && rates['ETH/USD'] > 0)) return null;
+    return { rates, source: sourceName };
+  }
 }
 
 async function fetchIndices() {
@@ -374,10 +406,125 @@ async function fetchIndices() {
   return items;
 }
 
+const MARKET_SYMBOLS = [
+  { pair: 'EUR/USD', yahoo: 'EURUSD=X' },
+  { pair: 'GBP/USD', yahoo: 'GBPUSD=X' },
+  { pair: 'USD/JPY', yahoo: 'USDJPY=X' },
+  { pair: 'USD/CHF', yahoo: 'USDCHF=X' },
+  { pair: 'AUD/USD', yahoo: 'AUDUSD=X' },
+  { pair: 'USD/CAD', yahoo: 'USDCAD=X' },
+  { pair: 'NZD/USD', yahoo: 'NZDUSD=X' },
+  { pair: 'GBP/JPY', yahoo: 'GBPJPY=X' },
+  { pair: 'EUR/JPY', yahoo: 'EURJPY=X' },
+  { pair: 'XAU/USD', yahoo: 'GC=F' },
+  { pair: 'BTC/USD', yahoo: 'BTC-USD' },
+  { pair: 'ETH/USD', yahoo: 'ETH-USD' }
+];
+const MARKETS_FILE = 'data/markets.json';
+const CRYPTO_FILE = 'data/crypto.json';
+const MARKET_BARS = 360;
+
+function finiteNumber(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function barsFromYahoo(payload) {
+  const chart = payload && payload.chart && payload.chart.result && payload.chart.result[0];
+  const meta = chart && chart.meta;
+  const timestamps = Array.isArray(chart && chart.timestamp) ? chart.timestamp : [];
+  const quote = chart && chart.indicators && chart.indicators.quote && chart.indicators.quote[0];
+  const bars = [];
+  for (let i = 0; i < timestamps.length; i++) {
+    const k = Math.floor(Number(timestamps[i]) / 60);
+    const open = finiteNumber(quote && quote.open && quote.open[i]);
+    const high = finiteNumber(quote && quote.high && quote.high[i]);
+    const low = finiteNumber(quote && quote.low && quote.low[i]);
+    const close = finiteNumber(quote && quote.close && quote.close[i]);
+    if (!open || !high || !low || !close) continue;
+    bars.push({ k, o: open, h: high, l: low, c: close });
+  }
+  return { meta, bars: bars.slice(-MARKET_BARS) };
+}
+
+export function buildMarketPayload({ price, forex, crypto, yahooByPair, now = new Date() }) {
+  const quotes = { ...(forex || {}) };
+  if (finiteNumber(price) && price > 0) quotes['XAU/USD'] = { price, source: 'gold-api', changePct: null };
+  if (crypto && crypto.rates) {
+    for (const [pair, value] of Object.entries(crypto.rates)) {
+      if (finiteNumber(value) && value > 0) quotes[pair] = { price: value, source: crypto.source, changePct: null };
+    }
+  }
+
+  const pairs = {};
+  for (const cfg of MARKET_SYMBOLS) {
+    const yahoo = yahooByPair && yahooByPair[cfg.pair];
+    const bars = yahoo ? yahoo.bars : [];
+    const meta = yahoo ? yahoo.meta : null;
+    const quote = quotes[cfg.pair] || {};
+    const current = finiteNumber(quote.price)
+      || finiteNumber(meta && meta.regularMarketPrice)
+      || (bars.length ? bars[bars.length - 1].c : null);
+    if (!(current > 0)) continue;
+    pairs[cfg.pair] = {
+      price: current,
+      bid: current,
+      ask: current,
+      spread: 0,
+      source: quote.source || 'Yahoo Finance',
+      changePct: finiteNumber(quote.changePct) ?? finiteNumber(meta && meta.regularMarketChangePercent),
+      previousClose: finiteNumber(meta && (meta.previousClose ?? meta.chartPreviousClose)),
+      bars
+    };
+  }
+  return {
+    generatedAt: now.toISOString(),
+    source: 'OANDA/gold-api/Binance or CoinGecko; Yahoo Finance 1m history; synthetic 0 spread',
+    anchor: 'aiterminaltrading',
+    staleAfterSec: 1800,
+    pairs
+  };
+}
+
+async function fetchMarkets({ price, forexData, cryptoData }) {
+  const yahooByPair = {};
+  await Promise.all(MARKET_SYMBOLS.map(async cfg => {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(cfg.yahoo)}?interval=1m&range=5d`;
+    try {
+      const r = await fetch(url, { headers: { 'user-agent': 'Mozilla/5.0' } });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      yahooByPair[cfg.pair] = barsFromYahoo(await r.json());
+    } catch (e) {
+      console.error('Gagal mengambil history 1m', cfg.pair, e.message || e);
+      yahooByPair[cfg.pair] = { meta: null, bars: [] };
+    }
+  }));
+  const forexQuotes = forexData && forexData.quotes ? forexData.quotes : {};
+  const payload = buildMarketPayload({
+    price,
+    forex: forexQuotes,
+    crypto: cryptoData,
+    yahooByPair,
+    now: new Date()
+  });
+  await fs.writeFile(MARKETS_FILE, JSON.stringify(payload, null, 2));
+  if (cryptoData && cryptoData.rates) {
+    await fs.writeFile(CRYPTO_FILE, JSON.stringify({
+      generatedAt: payload.generatedAt,
+      source: cryptoData.source,
+      pairs: cryptoData.rates
+    }, null, 2));
+  }
+  console.log('Berhasil menyimpan markets.json:', Object.keys(payload.pairs).join(', '));
+  return payload;
+}
+
 export async function main() {
   const events = await fetchCalendar();
-  const [price, forexData, crypto, indices] = await Promise.all([fetchMarket(), fetchForex(), fetchCrypto(), fetchIndices()]);
+  const [price, forexData, cryptoData, indices] = await Promise.all([fetchMarket(), fetchForex(), fetchCrypto(), fetchIndices()]);
+  await fetchMarkets({ price, forexData, cryptoData });
   const forex = forexData && forexData.rates;
+  const crypto = cryptoData && cryptoData.rates;
   const indexPrices = indices
     ? Object.fromEntries(indices.map(x => [x.symbol, x.price]))
     : null;
