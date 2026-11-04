@@ -49,6 +49,15 @@ The **Nasdaq 100 & S&P 500** board (`NAS100`, `US500`) follows the same USD cata
 
 `data/forex.json` shape: `{ generatedAt, source, anchor, quotes: { "EUR/USD": { price, consensus, source, changePct, crossCheckPct, providers } }, rates, providers }`. `rates` is USD-base and kept for the pre-news snapshot store; `quotes` is the direct pair price used by the board.
 
+### Harga pair live di browser (tanpa API key)
+
+A static file can only be as fresh as the 15-minute cron, so the pair board no longer depends on it. `loadForexLive()` in `index.html` POSTs directly to `https://scanner.tradingview.com/forex/scan` from the browser every 20 seconds and rebuilds the same payload shape the workflow writes (OANDA anchor, broker median, `crossCheckPct`, provider status), so the prices, `BUY/SELL · MARKET` entries and SL/TP levels move tick-by-tick instead of freezing between cron runs.
+
+- Free and keyless: the scanner returns `access-control-allow-origin` for the Pages origin. The request must stay a CORS *simple* request, so the body is sent as `content-type: text/plain;charset=UTF-8`; `application/json` would trigger a preflight, and TradingView only allows `Referer, Accept` there. `user-agent`, `origin` and `referer` are forbidden headers in `fetch` and are not used.
+- Gold, crypto and the countdown were already live (`api.gold-api.com` 30 s, Binance, 1 s clock). The pair board is now the same.
+- The arrow next to each price (`▲ 0.8 pip`) is the delta against the previous pull; it only appears when the quote actually moved, so a quiet market shows no arrow rather than a fake one.
+- Fallback chain: scanner → `data/forex.json` → daily `er-api`. Every failure grows the backoff by 5 minutes up to 20 minutes so a blocked network does not hammer the endpoint, and the source line states which mode the board is in: `LIVE — scanner TradingView ditarik ulang tiap 20 detik` or `SNAPSHOT 15 MENIT — scanner live sedang tidak terjangkau`.
+
 `data/markets.json` is the consolidated market snapshot consumed by the matching **SniperFXBTCETHXAU** board. It contains XAU/USD, BTC/USD, ETH/USD, the seven Sniper FX majors, GBP/JPY, EUR/JPY and the NAS100/US500 indices, plus their latest Yahoo Finance 1-minute history. Consumers must read this file instead of calling Binance/Deriv/OANDA directly when they want prices to match this terminal.
 
 `data/crypto.json` is written as well for convenience: `{ generatedAt, source, pairs: { "BTC/USD": number, "ETH/USD": number } }`.

@@ -80,6 +80,9 @@
     .fx-badge.sell { background: rgba(255,100,125,.16); color: var(--red); }
     .fx-badge.wait { background: rgba(242,184,75,.16); color: var(--amber); }
     .fx-price { font: 800 22px Manrope; letter-spacing: -.5px; margin: 4px 0 6px; }
+    .fx-tick { font: 800 10.5px "DM Sans",sans-serif; margin-left: 6px; letter-spacing: 0; }
+    .fx-tick.up { color: var(--green); } .fx-tick.down { color: var(--red); }
+    .fx-live { color: var(--green); font-size: 9px; letter-spacing: .6px; } .fx-live.off { color: var(--muted); }
     .fx-broker { margin: 0 0 6px; color: #9fdbe8; font-size: 9.5px; font-variant-numeric: tabular-nums; }
     .fx-broker.stale { color: var(--amber); }
     .fx-levels { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 11px; color: #dff5fb; }
@@ -193,6 +196,8 @@ let FOREX_RATES = {};
 let FOREX_QUOTES = {};
 let FOREX_META = {};
 let FOREX_BROKER = null;
+let FOREX_TICK = {};
+let FOREX_LIVE = false;
 let CRYPTO_RATES = {};
 let CRYPTO_CHANGE = {};
 let INDEX_RATES = {};
@@ -394,24 +399,172 @@ async function loadReaction() {
     } catch (e) { console.log('Reaction data unavailable', e); }
 }
 
-function applyForexPayload(j, fallbackSource) {
+function applyForexPayload(j, fallbackSource, live) {
     if (!j || typeof j !== 'object') return false;
     const quotes = j.quotes && typeof j.quotes === 'object' ? j.quotes : {};
     const rates = j.rates && typeof j.rates === 'object' ? j.rates : {};
     if (!Object.keys(quotes).length && !Object.keys(rates).length) return false;
+    FOREX_TICK = forexTicks(quotes);
     FOREX_QUOTES = quotes;
     FOREX_RATES = rates;
+    FOREX_LIVE = Boolean(live);
     FOREX_META = {
         source: j.source || fallbackSource || 'unknown',
         generatedAt: j.generatedAt || null,
+        live: Boolean(live),
         providers: j.providers && typeof j.providers === 'object' ? j.providers : {}
     };
     render();
     return true;
 }
 
+// Selisih harga antar-pull, supaya board terlihat bergerak dan bukan angka beku.
+function forexTicks(quotes) {
+    const ticks = {};
+    for (const pair of Object.keys(quotes || {})) {
+        const price = Number(quotes[pair] && quotes[pair].price);
+        const prev = Number(FOREX_QUOTES[pair] && FOREX_QUOTES[pair].price);
+        if (!Number.isFinite(price) || price <= 0) continue;
+        if (!Number.isFinite(prev) || prev <= 0 || prev === price) continue;
+        const pip = price > 10 ? 0.01 : 0.0001;
+        ticks[pair] = {
+            dir: price > prev ? 'up' : 'down',
+            pip: Number(Math.abs(price - prev) / pip)
+        };
+    }
+    return ticks;
+}
+
+const FOREX_SCANNER_URL = 'https://scanner.tradingview.com/forex/scan';
+const FOREX_FEED_IDS = ['OANDA', 'GOMARKETS', 'CMCMARKETS', 'FBS', 'SAXO', 'FOREXCOM', 'CAPITALCOM', 'PEPPERSTONE', 'VANTAGE', 'FPMARKETS', 'EIGHTCAP', 'BLACKBULL', 'THINKMARKETS', 'SKILLING'];
+const FOREX_FEED_NAMES = { OANDA: 'OANDA', GOMARKETS: 'GO Markets', CMCMARKETS: 'CMC Markets', FBS: 'FBS', SAXO: 'Saxo', FOREXCOM: 'FOREX.com', CAPITALCOM: 'Capital.com', PEPPERSTONE: 'Pepperstone', VANTAGE: 'Vantage', FPMARKETS: 'FP Markets', EIGHTCAP: 'Eightcap', BLACKBULL: 'BlackBull Markets', THINKMARKETS: 'ThinkMarkets', SKILLING: 'Skilling' };
+
+function forexScanTickers() {
+    const tickers = [];
+    for (const feed of FOREX_FEED_IDS) {
+        for (const pair of FOREX_PAIRS) tickers.push(feed + ':' + pair.replace('/', ''));
+    }
+    return tickers;
+}
+
+function parseForexScan(payload) {
+    const feeds = {};
+    const rows = payload && Array.isArray(payload.data) ? payload.data : [];
+    for (const row of rows) {
+        const parts = String(row && row.s || '').split(':');
+        const feed = parts[0], symbol = parts[1];
+        if (!feed || !symbol) continue;
+        if (FOREX_FEED_IDS.indexOf(feed) === -1) continue;
+        let pair = null;
+        for (const p of FOREX_PAIRS) { if (p.replace('/', '') === symbol) { pair = p; break; } }
+        if (!pair) continue;
+        const price = Number(row.d && row.d[1]);
+        if (!Number.isFinite(price) || price <= 0) continue;
+        const change = Number(row.d && row.d[2]);
+        if (!feeds[feed]) feeds[feed] = {};
+        feeds[feed][pair] = { price, changePct: Number.isFinite(change) ? change : null };
+    }
+    return feeds;
+}
+
+function forexMedian(values) {
+    const sorted = [...values].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+function forexRatesFromQuotes(quotes) {
+    const rates = { USD: 1 };
+    for (const pair of Object.keys(quotes || {})) {
+        const price = Number(quotes[pair] && quotes[pair].price);
+        if (!Number.isFinite(price) || price <= 0) continue;
+        const legs = pair.split('/');
+        const base = legs[0], term = legs[1];
+        if (!base || !term) continue;
+        if (term === 'USD' && base !== 'USD') rates[base] = 1 / price;
+        else if (base === 'USD' && term !== 'USD') rates[term] = price;
+    }
+    return rates;
+}
+
+function buildForexScanPayload(feeds, now) {
+    const quotes = {};
+    for (const pair of FOREX_PAIRS) {
+        const prices = [];
+        const providers = {};
+        for (const id of FOREX_FEED_IDS) {
+            const price = Number(feeds && feeds[id] && feeds[id][pair] && feeds[id][pair].price);
+            if (!Number.isFinite(price) || price <= 0) continue;
+            providers[id] = price;
+            prices.push(price);
+        }
+        if (!prices.length) continue;
+        const oanda = Number(feeds && feeds.OANDA && feeds.OANDA[pair] && feeds.OANDA[pair].price);
+        const anchored = Number.isFinite(oanda) && oanda > 0;
+        const anchor = anchored ? oanda : forexMedian(prices);
+        const references = prices.filter(p => Math.abs(p - anchor) > 1e-12);
+        const crossCheckPct = references.length
+            ? Math.max(...references.map(p => (Math.abs(p - anchor) / anchor) * 100))
+            : 0;
+        const change = feeds && feeds.OANDA && feeds.OANDA[pair] && feeds.OANDA[pair].changePct;
+        quotes[pair] = {
+            price: anchor,
+            consensus: forexMedian(prices),
+            source: anchored ? 'OANDA' : 'broker consensus',
+            changePct: Number.isFinite(Number(change)) ? Number(change) : null,
+            crossCheckPct: Number(crossCheckPct.toFixed(3)),
+            providers,
+            updatedAt: now.toISOString()
+        };
+    }
+    const providerStatus = {};
+    for (const id of FOREX_FEED_IDS) {
+        const count = feeds && feeds[id] ? Object.keys(feeds[id]).length : 0;
+        providerStatus[id] = { name: FOREX_FEED_NAMES[id] || id, status: count > 0 ? 'ok' : 'unavailable', pairs: count };
+    }
+    return {
+        generatedAt: now.toISOString(),
+        source: 'OANDA (live scanner)',
+        anchor: 'OANDA',
+        quotes,
+        rates: forexRatesFromQuotes(quotes),
+        providers: providerStatus
+    };
+}
+
+const FOREX_LIVE_BACKOFF_MS = 5 * 60 * 1000;
+let forexLiveFails = 0, forexLiveRetryAt = 0;
+
+async function loadForexLive(now = Date.now()) {
+    // TradingView scanner menerima request lintas-origin asal dikirim sebagai
+    // "simple request": tanpa header custom, content-type text/plain.
+    if (now < forexLiveRetryAt) return false;
+    try {
+        const r = await fetch(FOREX_SCANNER_URL, {
+            method: 'POST',
+            headers: { 'content-type': 'text/plain;charset=UTF-8' },
+            body: JSON.stringify({ symbols: { tickers: forexScanTickers() }, columns: ['name', 'close', 'change', 'update_mode'] }),
+            cache: 'no-store'
+        });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const feeds = parseForexScan(await r.json());
+        const payload = buildForexScanPayload(feeds, new Date(now));
+        if (!Object.keys(payload.quotes).length) throw new Error('no quotes');
+        forexLiveFails = 0; forexLiveRetryAt = 0;
+        return applyForexPayload(payload, 'OANDA (live scanner)', true);
+    } catch (e) {
+        forexLiveFails++;
+        forexLiveRetryAt = now + FOREX_LIVE_BACKOFF_MS * Math.min(forexLiveFails, 4);
+        console.log('Live forex scanner unavailable', e);
+        return false;
+    }
+}
+
 async function loadForex() {
-    // Sumber utama: OANDA live + cross-check broker dari workflow (data/forex.json).
+    // Sumber utama: scanner TradingView langsung dari browser (harga bergerak).
+    if (await loadForexLive()) return;
+
+    // Cadangan: snapshot OANDA + cross-check broker dari workflow (data/forex.json).
     try {
         const r = await fetch(`data/forex.json?v=${Date.now()}`, { cache: 'no-store' });
         if (r.ok) {
@@ -665,7 +818,10 @@ function forexSourceText(meta) {
         .map(([, p]) => p.name)
         .filter(Boolean)
         .slice(0, 4);
-    return `Harga acuan ${meta.source}${when}${refs.length ? ' | cross-check ' + refs.join(', ') : ''}. Quote broker MT5 tampil per pair bila bridge lokal aktif.`;
+    const mode = meta.live
+        ? 'LIVE — scanner TradingView ditarik ulang tiap 20 detik'
+        : 'SNAPSHOT 15 MENIT — scanner live sedang tidak terjangkau';
+    return `${mode}${when}. Harga acuan ${meta.source}${refs.length ? ' | cross-check ' + refs.join(', ') : ''}. Quote broker MT5 tampil per pair bila bridge lokal aktif.`;
 }
 
 function forexBoardState(now = Date.now()) {
@@ -694,6 +850,7 @@ function forexBoardState(now = Date.now()) {
         return {
             pair, rate, dir, note, eventLabel, phase, validUntil, noData,
             source: quote && quote.source,
+            tick: FOREX_TICK[pair] || null,
             crossCheckPct: quote && quote.crossCheckPct,
             broker: brokerQuoteFor(pair, now)
         };
@@ -718,6 +875,12 @@ function brokerLineHtml(b) {
         ? ` · STALE${Number.isFinite(b.ageMin) ? ' ' + Math.round(b.ageMin) + ' mnt' : ''}`
         : (Number.isFinite(b.ageMin) ? ` · ${Math.round(b.ageMin)} mnt` : '');
     return `<div class="fx-broker${b.stale ? ' stale' : ''}">${esc(b.brokerName)}${b.accountType && b.accountType !== 'unknown' ? ' · ' + esc(b.accountType) : ''} · bid ${Number(b.bid).toFixed(dec)} / ask ${Number(b.ask).toFixed(dec)}${spread}${age}</div>`;
+}
+
+function fxTickHtml(tick) {
+    if (!tick || !Number.isFinite(Number(tick.pip))) return '';
+    const up = tick.dir === 'up';
+    return `<span class="fx-tick ${up ? 'up' : 'down'}">${up ? '▲' : '▼'} ${Number(tick.pip).toFixed(1)} pip</span>`;
 }
 
 function forexBoardHtml(state) {
@@ -753,7 +916,7 @@ function forexBoardHtml(state) {
         }
         return `<div class="fx-card ${dir}">
             <div class="pair"><span>${esc(it.pair)}</span><span class="fx-badge ${dir}">${label}${suffix}</span></div>
-            <div class="fx-price">${fmt(rate, dec)}</div>
+            <div class="fx-price">${fmt(rate, dec)}${fxTickHtml(it.tick)}</div>
             ${brokerLineHtml(it.broker)}
             ${levels}
             <div class="fx-event">${it.eventLabel ? esc(it.eventLabel) : 'Tidak ada katalis aktif'}</div>
@@ -1576,6 +1739,8 @@ renderForexBoard();
 renderIndicesBoard();
 load(); loadForex(); loadBrokerForex(); loadCrypto(); loadIndices(); loadPreNews(); loadReaction();
 setInterval(() => { loadForex(); loadBrokerForex(); loadCrypto(); loadIndices(); }, 60000);
+// Harga pair: tarik scanner langsung tiap 20 detik supaya board benar-benar bergerak.
+setInterval(loadForexLive, 20000);
 // Kalender tidak terlalu sering berubah; cek setiap menit agar event Actual/Actual update muncul otomatis.
 setInterval(load, 60000);
 // reaction.json dibangun workflow dari bar 1 menit; cukup dipoles tiap 5 menit.

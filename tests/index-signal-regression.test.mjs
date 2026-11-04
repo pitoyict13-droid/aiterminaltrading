@@ -468,16 +468,18 @@ assert.ok(forexBoardStart < calendarStart, 'forex board must render before the c
 
 const forexBoardFn = extractFunction('forexBoardHtml');
 const brokerLineFn = extractFunction('brokerLineHtml');
-const forexBoardHtml = new Function(`const esc = s => String(s ?? '');\n${brokerLineFn}\n${forexBoardFn}\nreturn forexBoardHtml;`)();
+const fxTickFn = extractFunction('fxTickHtml');
+const forexBoardHtml = new Function(`const esc = s => String(s ?? '');\n${brokerLineFn}\n${fxTickFn}\n${forexBoardFn}\nreturn forexBoardHtml;`)();
 
 const fxBoard = forexBoardHtml({ items: [
-  { pair: 'EUR/USD', rate: 1.08696, dir: 'long', eventLabel: 'CPI · Kam 05 Nov 12:00 WITA', note: 'Forecast 4 vs Previous 3.8' },
+  { pair: 'EUR/USD', rate: 1.08696, dir: 'long', eventLabel: 'CPI · Kam 05 Nov 12:00 WITA', note: 'Forecast 4 vs Previous 3.8', tick: { dir: 'up', pip: 1.4 } },
   { pair: 'USD/JPY', rate: 157.88, dir: 'short', eventLabel: 'NFP · Jum 06 Nov 20:30 WITA', note: 'Forecast 65K vs Previous 29K' },
   { pair: 'USD/CAD', rate: 1.36, dir: null, eventLabel: '' }
 ] });
 assert.match(fxBoard, /EUR\/USD/);
 assert.match(fxBoard, /BUY · MARKET/);
 assert.match(fxBoard, /Entry 1\.08696/);
+assert.match(fxBoard, /▲ 1\.4 pip/, 'a live pull must show how far the price moved');
 assert.match(fxBoard, /USD\/JPY/);
 assert.match(fxBoard, /SELL · MARKET/);
 assert.match(fxBoard, /Entry 157\.880/);
@@ -800,5 +802,144 @@ const noPriceState = buildGoldState([usdFuture], null, now);
 assert.equal(noPriceState.status, 'loading');
 
 console.log('Passed global gold board tests');
+
+// Live pair prices: the board pulls TradingView's keyless scanner from the browser,
+// falls back to data/forex.json, and shows how far each price moved per pull.
+const liveFx = `
+  const FOREX_PAIRS = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CHF', 'AUD/USD', 'USD/CAD', 'NZD/USD', 'GBP/JPY', 'EUR/JPY'];
+  const WITA = 'Asia/Makassar';
+  ${extractFunction('forexScanTickers')}
+  ${extractFunction('parseForexScan')}
+  ${extractFunction('forexMedian')}
+  ${extractFunction('forexRatesFromQuotes')}
+  ${extractFunction('buildForexScanPayload')}
+  ${extractFunction('forexTicks')}
+  ${extractFunction('forexSourceText')}
+  return { forexScanTickers, parseForexScan, forexMedian, forexRatesFromQuotes, buildForexScanPayload, forexTicks, forexSourceText };
+`;
+const FOREX_FEED_IDS = ['OANDA', 'GOMARKETS', 'CMCMARKETS', 'FBS', 'SAXO', 'FOREXCOM', 'CAPITALCOM', 'PEPPERSTONE', 'VANTAGE', 'FPMARKETS', 'EIGHTCAP', 'BLACKBULL', 'THINKMARKETS', 'SKILLING'];
+const FOREX_FEED_NAMES = { OANDA: 'OANDA', GOMARKETS: 'GO Markets', CMCMARKETS: 'CMC Markets', FBS: 'FBS', SAXO: 'Saxo', FOREXCOM: 'FOREX.com', CAPITALCOM: 'Capital.com', PEPPERSTONE: 'Pepperstone', VANTAGE: 'Vantage', FPMARKETS: 'FP Markets', EIGHTCAP: 'Eightcap', BLACKBULL: 'BlackBull Markets', THINKMARKETS: 'ThinkMarkets', SKILLING: 'Skilling' };
+const fxLive = new Function('FOREX_FEED_IDS', 'FOREX_FEED_NAMES', liveFx)(FOREX_FEED_IDS, FOREX_FEED_NAMES);
+
+{
+  const tickers = fxLive.forexScanTickers();
+  assert.equal(tickers.length, FOREX_FEED_IDS.length * 9);
+  assert.ok(tickers.includes('OANDA:EURUSD') && tickers.includes('SKILLING:EURJPY'));
+  assert.ok(!tickers.some(t => /:EUR\/USD$/.test(t)), 'scanner symbols must be slash-free');
+}
+
+{
+  const feeds = fxLive.parseForexScan({ data: [
+    { s: 'OANDA:EURUSD', d: ['EURUSD', 1.12558, 0.57, 'streaming'] },
+    { s: 'OANDA:USDJPY', d: ['USDJPY', 158.441, -0.16, 'streaming'] },
+    { s: 'SAXO:EURUSD', d: ['EURUSD', 1.12570, 0.57, 'streaming'] },
+    { s: 'BOGUS:EURUSD', d: ['EURUSD', 9.99, 0, 'streaming'] },
+    { s: 'OANDA:USDKRW', d: ['USDKRW', 1400, 0, 'streaming'] },
+    { s: 'OANDA:GBPUSD', d: ['GBPUSD', 0, 0, 'streaming'] },
+    { s: 'OANDA:', d: ['X', 1.2, 0] }
+  ] });
+  assert.deepEqual(Object.keys(feeds).sort(), ['OANDA', 'SAXO']);
+  assert.equal(feeds.OANDA['EUR/USD'].price, 1.12558);
+  assert.equal(feeds.OANDA['EUR/USD'].changePct, 0.57);
+  assert.equal(feeds.OANDA['USD/JPY'].changePct, -0.16);
+  assert.equal(feeds.OANDA['GBP/USD'], undefined, 'a non-positive price is not a quote');
+  assert.deepEqual(fxLive.parseForexScan(null), {});
+  assert.deepEqual(fxLive.parseForexScan({ data: 'nope' }), {});
+}
+
+{
+  const payload = fxLive.buildForexScanPayload(fxLive.parseForexScan({ data: [
+    { s: 'OANDA:EURUSD', d: ['EURUSD', 1.12558, 0.57, 'streaming'] },
+    { s: 'SAXO:EURUSD', d: ['EURUSD', 1.12570, 0.57, 'streaming'] },
+    { s: 'PEPPERSTONE:EURUSD', d: ['EURUSD', 1.12560, 0.57, 'streaming'] },
+    { s: 'OANDA:GBPJPY', d: ['GBPJPY', 198.55, -0.12, 'streaming'] }
+  ] }), new Date('2026-11-04T08:00:00Z'));
+  const eur = payload.quotes['EUR/USD'];
+  assert.equal(eur.price, 1.12558, 'OANDA stays the anchor');
+  assert.equal(eur.consensus, 1.12560, 'consensus is the broker median');
+  assert.equal(eur.source, 'OANDA');
+  assert.equal(eur.crossCheckPct, Number(((0.00012 / 1.12558) * 100).toFixed(3)));
+  assert.equal(eur.updatedAt, '2026-11-04T08:00:00.000Z');
+  assert.equal(payload.quotes['GBP/JPY'].source, 'OANDA');
+  assert.equal(payload.quotes['GBP/USD'], undefined, 'a pair without quotes is skipped, never rendered as NaN');
+  assert.equal(payload.rates.USD, 1);
+  assert.ok(Math.abs(payload.rates.EUR - 1 / 1.12558) < 1e-12);
+  assert.ok(Math.abs(payload.rates.JPY - 158.441) < 1e-9 || payload.rates.JPY === undefined);
+  assert.equal(payload.providers.SAXO.status, 'ok');
+  assert.equal(payload.providers.FBS.status, 'unavailable');
+  assert.deepEqual(fxLive.buildForexScanPayload({}, new Date('2026-11-04T08:00:00Z')).quotes, {});
+}
+
+{
+  // A broker-only pair (OANDA down) still prices off the consensus median.
+  const payload = fxLive.buildForexScanPayload({ SAXO: { 'EUR/USD': { price: 1.10 } }, VANTAGE: { 'EUR/USD': { price: 1.12 } } }, new Date('2026-11-04T08:00:00Z'));
+  assert.equal(payload.quotes['EUR/USD'].price, 1.11);
+  assert.equal(payload.quotes['EUR/USD'].source, 'broker consensus');
+}
+
+{
+  const buildTicks = prevQuotes => new Function('FOREX_QUOTES', `${extractFunction('forexTicks')}\nreturn forexTicks;`)(prevQuotes);
+  const quotes = { 'EUR/USD': { price: 1.12558 }, 'USD/JPY': { price: 158.441 }, 'GBP/USD': { price: 1.34880 }, 'AUD/USD': { price: 0.65 } };
+  assert.deepEqual(buildTicks({})(quotes), {}, 'the first pull has nothing to compare against');
+  const tick = buildTicks(quotes);
+  assert.deepEqual(tick({ 'EUR/USD': { price: 1.12558 } }), {}, 'an unchanged price shows no arrow');
+  const moved = tick({ 'EUR/USD': { price: 1.12580 }, 'USD/JPY': { price: 158.431 }, 'GBP/USD': { price: 1.34880 }, 'AUD/USD': { price: 0.64990 }, 'NZD/USD': { price: 0.58 }, 'USD/CHF': { price: -1 } });
+  assert.equal(moved['EUR/USD'].dir, 'up');
+  assert.ok(Math.abs(moved['EUR/USD'].pip - 2.2) < 1e-6, 'majors count 0.0001 as a pip');
+  assert.equal(moved['USD/JPY'].dir, 'down');
+  assert.ok(Math.abs(moved['USD/JPY'].pip - 1.0) < 1e-6, 'JPY pairs count 0.01 as a pip');
+  assert.equal(moved['GBP/USD'], undefined);
+  assert.equal(moved['AUD/USD'].dir, 'down');
+  assert.equal(moved['NZD/USD'], undefined, 'a pair with no previous price has no delta');
+  assert.equal(moved['USD/CHF'], undefined, 'a broken new price is ignored');
+}
+
+{
+  assert.match(fxLive.forexSourceText({ source: 'OANDA (live scanner)', live: true, providers: { SAXO: { name: 'Saxo', status: 'ok' } } }), /LIVE — scanner TradingView ditarik ulang tiap 20 detik/);
+  assert.match(fxLive.forexSourceText({ source: 'OANDA (TradingView live)', live: false }), /SNAPSHOT 15 MENIT/);
+  assert.match(fxLive.forexSourceText({ source: 'OANDA', live: true, providers: { SAXO: { name: 'Saxo', status: 'ok' }, FBS: { name: 'FBS', status: 'unavailable' } } }), /cross-check Saxo/);
+  assert.doesNotMatch(fxLive.forexSourceText({ source: 'OANDA', live: true, providers: { FBS: { name: 'FBS', status: 'unavailable' } } }), /cross-check/);
+  assert.equal(fxLive.forexSourceText(null), '');
+  assert.doesNotMatch(fxLive.forexSourceText({ source: 'x', live: true, generatedAt: 'not-a-date' }), /diambil/);
+}
+
+// The live pull must never take the board down: failures back off, the file stays.
+const liveLoaderFn = source.slice(source.indexOf('async function loadForexLive'), source.indexOf('async function loadForex('));
+assert.ok(liveLoaderFn.includes('text/plain;charset=UTF-8'), 'scanner needs a simple request, application/json would trip CORS preflight');
+assert.ok(/headers: \{ 'content-type': 'text\/plain;charset=UTF-8' \}/.test(liveLoaderFn), 'content-type must be the only request header');
+assert.ok(!/['"](user-agent|origin|referer)['"]/.test(liveLoaderFn), 'forbidden browser headers must not appear in the scanner call');
+assert.match(liveLoaderFn, /cache: 'no-store'/);
+
+// Wiring: two consecutive pulls of a moving price must reach the board as a pip delta.
+const applyFx = new Function(`
+  let FOREX_QUOTES = {}, FOREX_RATES = {}, FOREX_META = {}, FOREX_TICK = {}, FOREX_LIVE = false;
+  let renders = 0;
+  const render = () => { renders++; };
+  ${extractFunction('forexTicks')}
+  ${extractFunction('applyForexPayload')}
+  return payload => {
+    const ok = applyForexPayload(payload, '', true);
+    return { ok, tick: FOREX_TICK, meta: FOREX_META, live: FOREX_LIVE, renders };
+  };
+`)();
+{
+  const first = applyFx({ quotes: { 'EUR/USD': { price: 1.12524, source: 'OANDA' } }, rates: { USD: 1 }, source: 'OANDA (live scanner)' });
+  assert.equal(first.ok, true);
+  assert.deepEqual(first.tick, {}, 'no delta before a previous price exists');
+  assert.equal(first.live, true);
+  assert.equal(first.meta.live, true);
+  assert.equal(first.renders, 1);
+
+  const second = applyFx({ quotes: { 'EUR/USD': { price: 1.12532, source: 'OANDA' } }, rates: { USD: 1 }, source: 'OANDA (live scanner)' });
+  assert.equal(second.tick['EUR/USD'].dir, 'up');
+  assert.ok(Math.abs(second.tick['EUR/USD'].pip - 0.8) < 1e-3);
+  assert.equal(second.renders, 2);
+
+  assert.equal(applyFx(null).ok, false, 'a broken payload keeps the last good quotes');
+  assert.equal(applyFx({ quotes: {}, rates: {} }).ok, false);
+  assert.equal(applyFx({ rates: { EUR: 0.92 } }).ok, true, 'a rates-only fallback still renders');
+}
+
+console.log('Passed live forex quote tests');
 
 
