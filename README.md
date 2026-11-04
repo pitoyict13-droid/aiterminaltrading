@@ -11,7 +11,7 @@
 3. Run the `Update live economic calendar` workflow once.
 4. Enable GitHub Pages from `main` and `/ (root)`.
 
-The calendar uses Forex Factory's free public weekly export; no calendar key is required. The workflow merges each refresh into the current month and updates XAU/USD price every 15 minutes. All displayed times use Waktu Indonesia Tengah (`Asia/Makassar`, UTC+8). Never put the private API key in public HTML. LONG/SHORT is scenario analysis, not a prediction.
+The calendar uses Forex Factory's free public weekly export; no calendar key is required. The workflow merges each refresh into the current month and updates XAU/USD, live forex quotes and index snapshots every 15 minutes. All displayed times use Waktu Indonesia Tengah (`Asia/Makassar`, UTC+8). Never put the private API key in public HTML. LONG/SHORT is scenario analysis, not a prediction.
 
 ## Forex majors, JPY crosses & indices pre-news BUY/SELL
 

@@ -544,7 +544,9 @@ function forexBoardState(now = Date.now()) {
         const quote = FOREX_QUOTES[pair] || null;
         return { pair, rate, dir, note, eventLabel, source: quote && quote.source, crossCheckPct: quote && quote.crossCheckPct };
     });
-    return { items, source: forexSourceText(FOREX_META) };
+    const source = forexSourceText(FOREX_META);
+    const cross = Math.max(0, ...items.map(it => Number(it.crossCheckPct) || 0));
+    return { items, source: source && cross > 0 ? `${source} | deviasi broker maks ${cross.toFixed(3)}%` : source };
 }
 
 function forexBoardHtml(state) {
