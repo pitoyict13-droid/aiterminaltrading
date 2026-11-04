@@ -91,6 +91,25 @@ This creates the scheduled task `aiterminaltrading-market-data`, which runs `pub
 
 Log: `bridge\market-data.log`. The task runs only while the user is logged on and the PC has internet access. It does not use broker credentials and does not place orders.
 
+### Ukuran repo & perapian riwayat mingguan
+
+The 15-minute refresh commits rewrite `data/*.json` (largest: `data/markets.json`, ±680 KB) all day, so the repository grows by history, not by files: ±80 commit/hari → ±0,3 MB/hari. `.github/workflows/weekly-history-compaction.yml` merapikannya setiap **Minggu 20:00 UTC (Senin 03:00 WITA)**:
+
+1. clone seluruh riwayat, simpan salinan `data/` versi terkini;
+2. `git filter-repo --invert-paths --path data/` — blob data lama hilang dari riwayat, commit kode tetap utuh (commit yang jadi kosong ikut dipangkas);
+3. `data/` versi terkini di-commit kembali, lalu **tree HEAD dibandingkan dengan tree sebelum compaction** — kalau berbeda sedikit saja, workflow berhenti dan tidak push apa pun;
+4. force-push ke branch yang sama, di bawah `concurrency` group `update-calendar` supaya tidak balapan dengan refresh 15 menit.
+
+Hasil simulasi pada clone: 163 → 54 commit, `.git` 976 KB → 342 KB, dan tree HEAD identik byte-per-byte, jadi situs tidak berubah sedikit pun. GitHub baru benar-benar membuang ruangnya setelah housekeeping server (jam–hari), dan tombol **Purge cache** pada Pages mempercepat penyajian file lama.
+
+Karena riwayat di-rewrite, setiap clone lama (PC Windows dengan scheduled task, atau laptop ini) perlu disinkronkan sekali setelah compaction berjalan:
+
+    git fetch origin && git reset --hard origin/main
+
+`publish-market-data.bat` hanya menyimpan data segar di atas `origin/main`, jadi setelah satu siklus sinkron ia kembali normal. Jangan menjalankan `filter-repo`/force-push manual bersamaan dengan workflow ini — satu-satunya penulis riwayat branch adalah workflow tersebut.
+
+Bar 1 menit di `data/markets.json` sengaja tetap 270 per aset: memotongnya jadi 60 memang lebih hemat, tapi jendela reaksi harga pasca-rilis hanya bisa dihitung mundur ±4,5 jam, sehingga badge `POST-NEWS` untuk rilis 5–6 jam sebelumnya hilang. Compaction mingguan sudah membatasi pertumbuhan sampai ±2 MB/bulan, jadi kualitas sinyal tidak dikorbankan untuk ruang. Kalau ingin commit lebih sedikit, turunkan `cron` di `update-calendar.yml` dari `*/15` ke `*/30`.
+
 
 Event cards also show the pre-news market bias for affected forex majors, crosses and indices, and the card's signal badge changes from WAIT to BUY/SELL. This is an execution scenario, not a guarantee: wait for the release if the forecast edge is flat.
 
