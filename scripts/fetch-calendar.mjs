@@ -414,15 +414,13 @@ const MARKET_SYMBOLS = [
   { pair: 'AUD/USD', yahoo: 'AUDUSD=X' },
   { pair: 'USD/CAD', yahoo: 'USDCAD=X' },
   { pair: 'NZD/USD', yahoo: 'NZDUSD=X' },
-  { pair: 'GBP/JPY', yahoo: 'GBPJPY=X' },
-  { pair: 'EUR/JPY', yahoo: 'EURJPY=X' },
   { pair: 'XAU/USD', yahoo: 'GC=F' },
   { pair: 'BTC/USD', yahoo: 'BTC-USD' },
   { pair: 'ETH/USD', yahoo: 'ETH-USD' }
 ];
 const MARKETS_FILE = 'data/markets.json';
 const CRYPTO_FILE = 'data/crypto.json';
-const MARKET_BARS = 360;
+const MARKET_BARS = 270;
 
 function finiteNumber(value) {
   const n = Number(value);
