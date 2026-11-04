@@ -1,21 +1,21 @@
 {
-  "generatedAt": "2026-11-04T16:00:39.298Z",
+  "generatedAt": "2026-11-04T21:50:27.298Z",
   "items": [
     {
       "symbol": "NAS100",
       "name": "Nasdaq 100",
       "yahoo": "^NDX",
-      "price": 28517.41,
+      "price": 28437.166,
       "previousClose": 28180.264,
-      "changePct": 1.2
+      "changePct": 0.91
     },
     {
       "symbol": "US500",
       "name": "S&P 500",
       "yahoo": "^GSPC",
-      "price": 7688.13,
+      "price": 7688.62,
       "previousClose": 7568.92,
-      "changePct": 1.57
+      "changePct": 1.58
     }
   ]
 }
