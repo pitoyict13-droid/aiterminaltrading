@@ -11,7 +11,7 @@
 3. Run the `Update live economic calendar` workflow once.
 4. Enable GitHub Pages from `main` and `/ (root)`.
 
-The calendar uses Forex Factory's free public weekly export; no calendar key is required. The workflow merges each refresh into the current month and updates XAU/USD, live forex quotes and index snapshots every 15 minutes. All displayed times use Waktu Indonesia Tengah (`Asia/Makassar`, UTC+8). Never put the private API key in public HTML. LONG/SHORT is scenario analysis, not a prediction.
+The calendar uses Forex Factory's free public weekly export for the event list and TradingView's free economic calendar only to backfill released `Actual` values; no calendar key is required. The workflow merges each refresh into the current month and updates XAU/USD, live forex quotes and index snapshots every 15 minutes. All displayed times use Waktu Indonesia Tengah (`Asia/Makassar`, UTC+8). Never put the private API key in public HTML. LONG/SHORT is scenario analysis, not a prediction.
 
 ## Forex majors, JPY crosses & indices pre-news BUY/SELL
 
@@ -22,6 +22,19 @@ The terminal has an always-visible **Forex Majors & JPY Crosses** board for EUR/
 - Higher US jobless claims/unemployment → USD weaker → BUY XXX/USD; SELL USD/XXX.
 - For crosses, the event currency decides the leg: GBP/JPY follows GBP news directly and JPY news inversely; EUR/JPY follows EUR directly and JPY inversely. A USD event is treated as risk-on/off.
 - If Forecast equals Previous, the board borrows the nearest same-currency medium/high event within 6 hours; otherwise it shows **WAIT** with straddle levels.
+
+### Arah pasca-rilis (post-news)
+
+Forex Factory's free exports contain **no `actual` field at all** (verified in both the JSON and XML feeds), so a released event used to freeze on `WAIT 46% confidence` forever. Two steps fix that:
+
+- **Actual backfill.** `scripts/fetch-calendar.mjs` also reads the public TradingView economic calendar (`https://economic-calendar.tradingview.com/events`, no API key, but it returns HTTP 403 unless `user-agent` + `origin` + `referer` are sent, and `country=` is ignored so rows are filtered by `currency`). Forex Factory remains the primary list: only an empty `Actual` is ever written, importance/times/titles stay from Forex Factory, and TradingView's own importance is ignored. Matching is minute-rounded with a 5-minute tolerance plus head-noun title agreement, so "Spanish Services PMI" lines up with "S&P Global Services PMI" but a Belgian print can never be written onto a Euro-area row. Scale is only applied when the shared reference value proves a 10^n factor (e.g. Austrian "Unemployed persons" 314.5 vs 306600), percent suffixes from Forex Factory are re-applied, and anything ambiguous or unscaled is refused instead of guessed. `calendar.json` is rewritten only when at least one value was filled, and any TradingView failure falls back silently to the old calendar so the 15-minute cron never breaks.
+- **Price reaction.** Some series (all S&P Global PMIs) simply have no published actual anywhere. For those, direction is measured from the 270 Yahoo 1-minute bars already stored in `data/markets.json`: the last close at or before the release versus the last close 15–45 minutes after it, written to `data/reaction.json` for releases in the last 6 hours and held for at most 45 minutes in the browser.
+
+Direction is then resolved as a ladder, and the label always names the basis actually used:
+
+`Actual vs Forecast` → `Actual vs Previous` → `reaksi harga 1 menit pasca-rilis` → **`NO ACTUAL DATA`**.
+
+A released event inside the 6-hour window keeps its slot on the pair board (badge `BUY/SELL · POST-NEWS` with `valid s/d <expiry>`), an unresolved one is shown as `NO ACTUAL DATA` instead of a synthetic percentage — the confidence meter prints `—` whenever there is no computed surprise. Own-event edge (Forecast vs Previous, or a real Actual) is allowed for **every** impact level including Forex Factory "Low"; only the neighbour-borrowing fallback in `preNewsBias()` and the gold/USD boards stay at importance 2+. Reaction and momentum directions are asset-relative (the pair's own price rose) and are therefore never re-mapped through `mapPairBias()`.
 
 The **Nasdaq 100 & S&P 500** board (`NAS100`, `US500`) follows the same USD catalyst: BUY means risk-on/stronger index, SELL means risk-off/weaker index. Risk template is NAS100 1%/2% and US500 0.75%/1.5%. Prices come from Yahoo Finance via `data/indices.json` (refreshed by GitHub Actions), with a live CORS-proxy fallback in the browser.
 
@@ -39,6 +52,8 @@ The **Nasdaq 100 & S&P 500** board (`NAS100`, `US500`) follows the same USD cata
 `data/markets.json` is the consolidated market snapshot consumed by the matching **SniperFXBTCETHXAU** board. It contains XAU/USD, BTC/USD, ETH/USD, the seven Sniper FX majors, GBP/JPY, EUR/JPY and the NAS100/US500 indices, plus their latest Yahoo Finance 1-minute history. Consumers must read this file instead of calling Binance/Deriv/OANDA directly when they want prices to match this terminal.
 
 `data/crypto.json` is written as well for convenience: `{ generatedAt, source, pairs: { "BTC/USD": number, "ETH/USD": number } }`.
+
+`data/reaction.json` is the post-release price reaction derived from those 1-minute bars: `{ generatedAt, events: { "<Date>|<Event>": { releasedAt, pairs: { "EUR/USD": { baseClose, lastClose, movePct, dir, minutes } } } } }`, keyed exactly like the pre-news store so the page can look it up with the same `Date|Event` key.
 
 ### Local MT5 broker bid/ask
 

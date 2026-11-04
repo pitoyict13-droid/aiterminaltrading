@@ -64,8 +64,12 @@ const preNewsBiasFn = extractFunction('preNewsBias');
 const invertDirFn = extractFunction('invertDir');
 const mapPairBiasFn = extractFunction('mapPairBias');
 const indexRateFn = extractFunction('indexRate');
+const reactionForFn = extractFunction('reactionFor');
+const moveNoteFn = extractFunction('moveNote');
+const nextPairCatalystFn = extractFunction('nextPairCatalyst');
+const pairCatalystDirectionFn = extractFunction('pairCatalystDirection');
 
-function buildTpSl(livePrice, forexRates, cryptoRates, store, preNews = {}, indexRates = defaultIndexRates) {
+function buildTpSl(livePrice, forexRates, cryptoRates, store, preNews = {}, indexRates = defaultIndexRates, reaction = null) {
   const body = `
     const WITA = 'Asia/Makassar';
     const POST_NEWS_HOLD_MS = 6 * 60 * 60 * 1000;
@@ -80,6 +84,8 @@ function buildTpSl(livePrice, forexRates, cryptoRates, store, preNews = {}, inde
     const fmtDate = d => new Intl.DateTimeFormat('en-IN', { timeZone: WITA, weekday: 'short', day: '2-digit', month: 'short' }).format(d);
     const fmtTime = d => new Intl.DateTimeFormat('en-IN', { timeZone: WITA, hour: '2-digit', minute: '2-digit', hour12: false }).format(d) + ' WITA';
     const esc = s => String(s ?? '');
+    const REACTION_MAX_AGE_MS = 45 * 60 * 1000;
+    const REACTION = ${JSON.stringify(reaction)};
     ${numFn}
     ${countryFn}
     ${biasFn}
@@ -92,6 +98,8 @@ function buildTpSl(livePrice, forexRates, cryptoRates, store, preNews = {}, inde
     ${pairRateFromFn}
     ${pairRateFn}
     ${indexRateFn}
+    ${moveNoteFn}
+    ${reactionForFn}
     ${momentumForFn}
     ${postNewsMomentumFn}
     ${pairCurrenciesFn}
@@ -281,7 +289,146 @@ const staleHtml = buildTpSl(4000, forexRates, cryptoRates, noStore)({ dir: 'wait
 assert.match(staleHtml, /kedaluwarsa/);
 assert.doesNotMatch(staleHtml, /BUY/);
 
+// Post-news with no published Actual: workflow-calculated 1-minute reaction gives the direction.
+const pastEurLow = {
+  Date: new Date(Date.now() - 40 * 60 * 1000).toISOString(),
+  Event: 'Spanish Services PMI', Country: 'EUR', Importance: 1,
+  Forecast: '57.6', Previous: '58.3', Actual: ''
+};
+const reactionPayload = {
+  generatedAt: new Date().toISOString(),
+  events: {
+    [`${pastEurLow.Date}|${pastEurLow.Event}`]: {
+      releasedAt: pastEurLow.Date,
+      pairs: {
+        'EUR/USD': { movePct: 0.12, dir: 'long', minutes: 45 },
+        'USD/JPY': { movePct: 0.08, dir: 'long', minutes: 45 },
+        'XAU/USD': { movePct: 0.31, dir: 'short', minutes: 45 }
+      }
+    }
+  }
+};
+const eurReactionHtml = buildTpSl(4000, forexRates, cryptoRates, noStore, {}, defaultIndexRates, reactionPayload)(
+  analyze({ ...pastEurLow }), pastEurLow
+);
+assert.notEqual(eurReactionHtml, '', 'Importance 1 event must publish levels once the price reaction is known');
+assert.match(eurReactionHtml, /POST-NEWS/);
+assert.match(eurReactionHtml, /EUR\/USD <b>BUY<\/b>/);
+assert.match(eurReactionHtml, /valid s\/d/);
+assert.doesNotMatch(eurReactionHtml, /NaN|undefined/);
+
+// A stale reaction.json (older than the freshness window) must not drive any signal.
+const staleReaction = {
+  generatedAt: new Date(Date.now() - 90 * 60 * 1000).toISOString(),
+  events: reactionPayload.events
+};
+assert.equal(buildTpSl(4000, forexRates, cryptoRates, noStore, {}, defaultIndexRates, staleReaction)(
+  analyze({ ...pastEurLow }), pastEurLow
+), '');
+
 console.log('Passed post-news per-pair momentum + TP tests');
+
+// Direction ladder: Actual vs Forecast -> Actual vs Previous -> price reaction -> no data.
+const eurCpiReleased = {
+  Date: new Date(Date.now() - 40 * 60 * 1000).toISOString(),
+  Event: 'CPI', Country: 'EUR', Importance: 2,
+  Forecast: '3.0%', Previous: '2.8%', Actual: '3.2%'
+};
+const ladderForecast = analyze(eurCpiReleased);
+assert.equal(ladderForecast.dir, 'long');
+assert.equal(ladderForecast.basis, 'actual-forecast');
+assert.equal(ladderForecast.reference, 'Forecast');
+
+const noForecast = analyze({ ...eurCpiReleased, Forecast: '' });
+assert.equal(noForecast.basis, 'actual-previous');
+assert.equal(noForecast.dir, 'long');
+assert.equal(noForecast.reference, 'Previous');
+
+const pending = analyze({ ...eurCpiReleased, Date: new Date(Date.now() + 60 * 60 * 1000).toISOString(), Actual: '' });
+assert.equal(pending.basis, 'forecast-pending');
+assert.equal(pending.dir, 'wait');
+assert.equal(pending.score, 0);
+
+const noActual = analyze({ ...pastEurLow, Actual: '' });
+assert.equal(noActual.noData, true);
+assert.equal(noActual.basis, 'no-actual');
+assert.equal(noActual.score, 0, 'no synthetic confidence for unpublished Actual');
+
+// Pair mapping of the same EUR release.
+assert.equal(mapPairBias('EUR/USD', ladderForecast.dir, 'EUR'), 'long');
+assert.equal(mapPairBias('USD/JPY', ladderForecast.dir, 'EUR'), 'short');
+assert.equal(mapPairBias('USD/CHF', ladderForecast.dir, 'EUR'), 'short');
+
+// Pair board: a released event inside the post-news window beats a far-future one.
+function buildCatalyst(eventList, reaction) {
+  const body = `
+    const POST_NEWS_HOLD_MS = 6 * 60 * 60 * 1000;
+    const REACTION_MAX_AGE_MS = 45 * 60 * 1000;
+    const REACTION = ${JSON.stringify(reaction)};
+    const events = ${JSON.stringify(eventList)};
+    const FOREX_RATES = ${JSON.stringify(forexRates)};
+    const FOREX_QUOTES = null;
+    const PRE_NEWS = {};
+    const INDEX_RATES = ${JSON.stringify(defaultIndexRates)};
+    const CRYPTO_RATES = {};
+    const LIVE_PRICE = 4000;
+    const localStorage = { getItem: () => null, setItem: () => {} };
+    ${numFn}
+    ${countryFn}
+    ${biasFn}
+    ${analyzeFn}
+    ${dateEventKeyFn}
+    ${eventKeyFn}
+    ${normalizeSnapshotFn}
+    ${preNewsSnapshotFn}
+    ${preNewsPriceFn}
+    ${pairRateFromFn}
+    ${pairRateFn}
+    ${moveNoteFn}
+    ${reactionForFn}
+    ${momentumForFn}
+    ${forecastBiasFn}
+    ${invertDirFn}
+    ${mapPairBiasFn}
+    ${pairCurrenciesFn}
+    ${nextPairCatalystFn}
+    ${pairCatalystDirectionFn}
+    return { nextPairCatalyst, pairCatalystDirection };
+  `;
+  return new Function(body)();
+}
+
+{
+  const far = {
+    Date: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
+    Event: 'Nonfarm Payrolls', Country: 'EUR', Importance: 3, Forecast: '120K', Previous: '100K', Actual: ''
+  };
+  const { nextPairCatalyst, pairCatalystDirection } = buildCatalyst([pastEurLow, far], reactionPayload);
+  const hit = nextPairCatalyst('EUR/USD');
+  assert.ok(hit, 'EUR/USD must have an active catalyst');
+  assert.equal(hit.phase, 'post');
+  assert.equal(hit.e.Event, 'Spanish Services PMI', 'freshly released event must not be dropped from the board');
+  assert.equal(pairCatalystDirection(hit.e, 'EUR/USD').dir, 'long');
+  assert.equal(pairCatalystDirection(hit.e, 'USD/JPY').dir, 'long', 'reaction.json is asset-relative, so it is never re-mapped through mapPairBias');
+
+  // Without reaction data the same event resolves to no direction, and the board
+  // falls back to the upcoming event instead of freezing on WAIT.
+  const bare = buildCatalyst([pastEurLow, far], null);
+  assert.equal(bare.pairCatalystDirection(pastEurLow, 'EUR/USD').noData, true);
+  assert.equal(bare.nextPairCatalyst('EUR/USD').phase, 'pre');
+  // A pair with no catalyst at all renders a neutral card, never NaN.
+  const lone = buildCatalyst([], null);
+  assert.equal(lone.nextPairCatalyst('EUR/USD'), null);
+}
+
+{
+  const releasedOnly = buildCatalyst([pastEurLow], null);
+  const hit = releasedOnly.nextPairCatalyst('EUR/USD');
+  assert.equal(hit.phase, 'post', 'undirected release is still shown so the board can explain why it waits');
+  assert.equal(releasedOnly.pairCatalystDirection(hit.e, 'EUR/USD').noData, true);
+}
+
+console.log('Passed post-news direction ladder + pair catalyst tests');
 
 // Global crypto board: always visible outside event cards.
 const boardStart = source.indexOf('id="cryptoBoard"');
@@ -405,6 +552,24 @@ const brokerSourceTextFn = extractFunction('brokerSourceText');
 const brokerSourceText = new Function('FOREX_BROKER', 'BROKER_QUOTE_MAX_AGE_MS', `${brokerSourceTextFn}\nreturn brokerSourceText;`)(brokerPayload, 30 * 60 * 1000);
 assert.match(brokerSourceText(Date.parse('2026-11-04T00:55:00Z')), /Quote broker FBS \(demo\) fresh 15 mnt/);
 assert.match(brokerSourceText(Date.parse('2026-11-04T01:20:00Z')), /stale 40 mnt/);
+
+// Post-release cards carry the POST-NEWS badge and an expiry, not the pre-news MARKET label.
+const postBoard = forexBoardHtml({ items: [
+  { pair: 'EUR/USD', rate: 1.08696, dir: 'long', phase: 'post', noData: false,
+    eventLabel: 'Spanish Services PMI · Rab 04 Nov 16:15 WITA',
+    note: 'Reaksi harga +0.12% dalam 45 mnt pasca-rilis — Actual tidak dipublikasikan',
+    validUntil: 'Rab 04 Nov 22:15 WITA' },
+  { pair: 'GBP/USD', rate: 1.34880, dir: null, phase: 'post', noData: true,
+    eventLabel: 'Spanish Services PMI · Rab 04 Nov 16:15 WITA',
+    note: 'NO ACTUAL DATA — arah belum terkonfirmasi', validUntil: 'Rab 04 Nov 22:15 WITA' }
+] });
+assert.match(postBoard, /EUR\/USD/);
+assert.match(postBoard, /BUY · POST-NEWS/);
+assert.doesNotMatch(postBoard, /· MARKET/);
+assert.match(postBoard, /valid s\/d Rab 04 Nov 22:15 WITA/);
+assert.match(postBoard, /NO ACTUAL DATA — arah belum terkonfirmasi/);
+assert.match(postBoard, /WAIT/);
+assert.doesNotMatch(postBoard, /NaN|undefined|null/);
 
 console.log('Passed global forex board tests');
 

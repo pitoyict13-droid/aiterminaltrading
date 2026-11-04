@@ -12,7 +12,7 @@ if errorlevel 1 (
   exit /b 1
 )
 
-%GIT% add data\calendar.json data\market.json data\forex.json data\crypto.json data\markets.json data\prenews.json data\indices.json
+%GIT% add data\calendar.json data\market.json data\forex.json data\crypto.json data\markets.json data\prenews.json data\indices.json data\reaction.json
 %GIT% diff --cached --quiet
 if not errorlevel 1 (
   echo [%date% %time%] data unchanged >> "%LOG%"

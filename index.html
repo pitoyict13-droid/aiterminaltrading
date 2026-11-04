@@ -198,6 +198,8 @@ let CRYPTO_CHANGE = {};
 let INDEX_RATES = {};
 let INDEX_CHANGE = {};
 let PRE_NEWS = {};
+let REACTION = null;
+const REACTION_MAX_AGE_MS = 45 * 60 * 1000;
 window.applyLiveXauPrice = function (price) {
     const p = Number(price);
     if (!Number.isFinite(p) || p <= 0) return;
@@ -253,8 +255,8 @@ function rememberPreNewsPrice(e) {
     const t = new Date(e.Date).getTime();
     if (!Number.isFinite(t)) return;
     const now = Date.now();
-    // Simpan tick terakhir sebelum rilis (maks. 1 jam) sebagai basis momentum per pair.
-    if (now >= t || t - now > 60 * 60 * 1000) return;
+    // Simpan tick terakhir sebelum rilis (maks. 2 jam) sebagai basis momentum per pair.
+    if (now >= t || t - now > 2 * 60 * 60 * 1000) return;
     const prev = preNewsSnapshot(e) || {};
     const snap = { ...prev };
     if (LIVE_PRICE) snap.gold = LIVE_PRICE;
@@ -264,6 +266,12 @@ function rememberPreNewsPrice(e) {
         if (Number.isFinite(v) && v > 0) fx[c] = v;
     });
     if (Object.keys(fx).length) snap.forex = fx;
+    const fxQuotes = {};
+    FOREX_PAIRS.forEach(pair => {
+        const v = Number(pairRate(pair));
+        if (Number.isFinite(v) && v > 0) fxQuotes[pair] = v;
+    });
+    if (Object.keys(fxQuotes).length) snap.forexQuotes = { ...(prev.forexQuotes || {}), ...fxQuotes };
     if (Object.keys(CRYPTO_RATES).length) snap.crypto = { ...CRYPTO_RATES };
     const idx = {};
     Object.keys(INDEX_RATES).forEach(symbol => {
@@ -271,7 +279,7 @@ function rememberPreNewsPrice(e) {
         if (Number.isFinite(v) && v > 0) idx[symbol] = v;
     });
     if (Object.keys(idx).length) snap.indices = { ...(snap.indices || {}), ...idx };
-    if (snap.gold == null && !snap.forex && !snap.crypto && !snap.indices) return;
+    if (snap.gold == null && !snap.forex && !snap.forexQuotes && !snap.crypto && !snap.indices) return;
     snap.capturedAt = new Date(now).toISOString();
     try { localStorage.setItem(eventKey(e), JSON.stringify(snap)); } catch {}
 }
@@ -299,8 +307,8 @@ function momentumFor(e, kind, pair) {
         base = Number(snap.gold);
         cur = Number(LIVE_PRICE);
     } else if (kind === 'forex') {
-        base = Number(pairRateFrom(snap.forex, pair));
-        cur = Number(pairRateFrom(FOREX_RATES, pair));
+        base = Number(snap.forexQuotes && snap.forexQuotes[pair]) || pairRateFrom(snap.forex, pair);
+        cur = pairRate(pair);
     } else if (kind === 'crypto') {
         base = Number(snap.crypto && snap.crypto[pair]);
         cur = Number(CRYPTO_RATES[pair]);
@@ -315,6 +323,27 @@ function momentumFor(e, kind, pair) {
 
 function postNewsMomentum(e) {
     return momentumFor(e, 'gold');
+}
+
+// Reaksi harga pasca-rilis yang dihitung workflow dari bar 1 menit (data/reaction.json).
+// `dir` di sini sudah per-aset: 'long' = harga aset itu sendiri naik setelah rilis,
+// jadi TIDAK boleh dilewatkan mapPairBias.
+function reactionFor(e, pair) {
+    const entry = REACTION && REACTION.events ? REACTION.events[dateEventKey(e)] : null;
+    const hit = entry && entry.pairs ? entry.pairs[pair] : null;
+    if (!hit) return null;
+    const generatedAt = Date.parse(REACTION && REACTION.generatedAt);
+    if (!Number.isFinite(generatedAt) || Date.now() - generatedAt > REACTION_MAX_AGE_MS) return null;
+    const movePct = Number(hit.movePct);
+    if (!Number.isFinite(movePct)) return null;
+    const dir = hit.dir === 'long' || hit.dir === 'short' ? hit.dir : null;
+    const minutes = Number(hit.minutes);
+    return { dir, movePct, minutes: Number.isFinite(minutes) ? minutes : null };
+}
+
+function moveNote(label, changePct, minutes) {
+    const signed = `${changePct >= 0 ? '+' : ''}${Number(changePct).toFixed(2)}%`;
+    return minutes ? `${label} ${signed} dalam ${minutes} mnt pasca-rilis` : `${label} ${signed} pasca-rilis`;
 }
 
 // Pair yang relevan dengan negara news. USD adalah driver global, jadi cross non-USD
@@ -354,6 +383,15 @@ async function loadPreNews() {
         const j = await r.json();
         if (j && typeof j === 'object') { PRE_NEWS = j; render(); }
     } catch (e) { console.log('Pre-news snapshots unavailable', e); }
+}
+
+async function loadReaction() {
+    try {
+        const r = await fetch(`data/reaction.json?v=${Date.now()}`, { cache: 'no-store' });
+        if (!r.ok) return;
+        const j = await r.json();
+        if (j && j.events) { REACTION = j; render(); }
+    } catch (e) { console.log('Reaction data unavailable', e); }
 }
 
 function applyForexPayload(j, fallbackSource) {
@@ -484,15 +522,23 @@ function goldBoardState(now = Date.now()) {
 
     const a = analyze(pick.e);
     const directed = a.dir === 'long' || a.dir === 'short';
-    const mom = directed ? null : momentumFor(pick.e, 'gold');
-    const dir = directed ? a.dir : (mom && mom.dir ? mom.dir : null);
-    const changePct = mom ? mom.changePct : null;
+    const reaction = !directed && a.noData ? reactionFor(pick.e, 'XAU/USD') : null;
+    const mom = directed || (reaction && reaction.dir) ? null : momentumFor(pick.e, 'gold');
+    const dir = directed
+        ? a.dir
+        : (reaction && reaction.dir ? reaction.dir : (mom && mom.dir ? mom.dir : null));
+    const changePct = reaction && reaction.dir ? reaction.movePct : (mom ? mom.changePct : null);
+    const note = directed
+        ? `Post-news ${a.comparedTo}`
+        : (reaction && reaction.dir
+            ? `${moveNote('Reaksi emas', reaction.movePct, reaction.minutes)} — Actual tidak dipublikasikan`
+            : (mom && mom.dir ? `Post-news momentum ${mom.changePct >= 0 ? '+' : ''}${mom.changePct.toFixed(2)}% dari harga pra-rilis` : null));
     const validUntil = fmtDate(postNewsExpiry(pick.e)) + ' ' + fmtTime(postNewsExpiry(pick.e));
 
     if (dir) {
         const riskPct = 0.5, rewardPct = 1.0;
         return {
-            status: 'post', event: label(pick), dir, changePct, validUntil,
+            status: 'post', event: label(pick), dir, changePct, validUntil, note,
             levels: {
                 entry: price,
                 sl: dir === 'long' ? price * (1 - riskPct / 100) : price * (1 + riskPct / 100),
@@ -504,6 +550,7 @@ function goldBoardState(now = Date.now()) {
     const buffer = price * 0.0025;
     return {
         status: 'post', event: label(pick), dir: null, changePct, validUntil,
+        note: a.noData ? 'NO ACTUAL DATA — arah belum terkonfirmasi' : null,
         buy: { entry: price + buffer, sl: price + buffer - buffer * 1.5, tp: price + buffer + buffer * 3 },
         sell: { entry: price - buffer, sl: price - buffer + buffer * 1.5, tp: price - buffer - buffer * 3 }
     };
@@ -526,7 +573,7 @@ function goldBoardHtml(price, state) {
     if (st.status === 'post' && st.dir && st.levels) {
         const long = st.dir === 'long';
         const mom = st.changePct == null ? '' : ` • momentum ${st.changePct >= 0 ? '+' : ''}${Number(st.changePct).toFixed(2)}%`;
-        return html + `<div class="mb-levels">${lv(long ? 'buy' : 'sell', (long ? 'BUY' : 'SELL') + mom, st.levels)}</div><div class="mb-meta">Post-news momentum • valid s/d ${st.validUntil || '6 jam setelah rilis'}</div>`;
+        return html + `<div class="mb-levels">${lv(long ? 'buy' : 'sell', (long ? 'BUY' : 'SELL') + mom, st.levels)}</div><div class="mb-meta">${st.note || 'Post-news momentum'} • valid s/d ${st.validUntil || '6 jam setelah rilis'}</div>`;
     }
     if (st.status === 'post' && st.buy && st.sell) {
         return html + `<div class="mb-levels">${lv('buy', 'BUY BREAKOUT', st.buy)}${lv('sell', 'SELL BREAKOUT', st.sell)}</div><div class="mb-meta">Post-news breakout OCO • valid s/d ${st.validUntil || '6 jam setelah rilis'}</div>`;
@@ -562,13 +609,46 @@ function renderCryptoBoard() {
     if (grid) grid.innerHTML = cryptoBoardHtml(CRYPTO_RATES, CRYPTO_CHANGE);
 }
 
-function nextPairEvent(pair, now = Date.now()) {
+// Rilis terakhir yang masih berada dalam jendela pasca-news menang atas event
+// berikutnya; tanpa ini board pair selalu melompat ke katalis jauh dan WAIT.
+function pairCatalystDirection(e, pair) {
+    const a = analyze(e);
+    if (a.dir === 'long' || a.dir === 'short') {
+        return { dir: mapPairBias(pair, a.dir, e.Country), basis: a.basis, note: a.comparedTo };
+    }
+    if (!a.noData) return { dir: null, basis: a.basis, note: a.reason };
+    const reaction = reactionFor(e, pair);
+    if (reaction && reaction.dir) {
+        return { dir: reaction.dir, basis: 'reaction', note: `${moveNote('Reaksi harga', reaction.movePct, reaction.minutes)} — Actual tidak dipublikasikan` };
+    }
+    const mom = momentumFor(e, 'forex', pair);
+    if (mom && mom.dir) {
+        return { dir: mom.dir, basis: 'momentum', note: `Momentum ${mom.changePct >= 0 ? '+' : ''}${mom.changePct.toFixed(2)}% dari harga pra-rilis — Actual tidak dipublikasikan` };
+    }
+    return { dir: null, noData: true, basis: 'no-actual', note: 'NO ACTUAL DATA — arah belum terkonfirmasi' };
+}
+
+function nextPairCatalyst(pair, now = Date.now()) {
     const currencies = pairCurrencies(pair);
-    return events
-        .filter(e => (+e.Importance || 1) >= 2 && currencies.includes(countryCode(e.Country)))
+    const pool = events
+        .filter(e => (+e.Importance || 1) >= 1 && currencies.includes(countryCode(e.Country)))
         .map(e => ({ e, t: new Date(e.Date).getTime() }))
-        .filter(x => Number.isFinite(x.t) && x.t > now)
-        .sort((a, b) => a.t - b.t)[0] || null;
+        .filter(x => Number.isFinite(x.t));
+    const released = pool
+        .filter(x => x.t <= now && now <= x.t + POST_NEWS_HOLD_MS)
+        .sort((a, b) => a.t - b.t)
+        .filter(x => pairCatalystDirection(x.e, pair).dir)
+        .pop();
+    if (released) return { ...released, phase: 'post' };
+    const upcoming = pool.filter(x => x.t > now).sort((a, b) => a.t - b.t)[0];
+    if (upcoming) return { ...upcoming, phase: 'pre' };
+    // Tidak ada katalis mendatang: tetap tampilkan rilis terakhir di jendela pasca-news
+    // supaya kartu menjelaskan kenapa arahnya belum terkonfirmasi.
+    const stale = pool
+        .filter(x => x.t <= now && now <= x.t + POST_NEWS_HOLD_MS)
+        .sort((a, b) => a.t - b.t)
+        .pop();
+    return stale ? { ...stale, phase: 'post' } : null;
 }
 
 function forexSourceText(meta) {
@@ -591,19 +671,28 @@ function forexSourceText(meta) {
 function forexBoardState(now = Date.now()) {
     const items = FOREX_PAIRS.map(pair => {
         const rate = pairRate(pair);
-        const next = nextPairEvent(pair, now);
-        let dir = null, note = '', eventLabel = '';
+        const next = nextPairCatalyst(pair, now);
+        let dir = null, note = '', eventLabel = '', phase = '', validUntil = '', noData = false;
         if (next) {
-            const bias = preNewsBias(next.e);
-            if (bias) dir = mapPairBias(pair, bias.dir, next.e.Country);
             eventLabel = `${next.e.Event} · ${fmtDate(new Date(next.e.Date))} ${fmtTime(new Date(next.e.Date))}`;
-            note = bias
-                ? `Forecast ${bias.forecast} vs Previous ${bias.previous}${bias.source ? ' • ' + bias.source : ''}`
-                : 'Forecast vs Previous flat — wait for the release';
+            if (next.phase === 'post') {
+                const resolved = pairCatalystDirection(next.e, pair);
+                dir = resolved.dir;
+                noData = Boolean(resolved.noData);
+                note = resolved.note;
+                validUntil = `${fmtDate(postNewsExpiry(next.e))} ${fmtTime(postNewsExpiry(next.e))}`;
+            } else {
+                const bias = preNewsBias(next.e);
+                if (bias) dir = mapPairBias(pair, bias.dir, next.e.Country);
+                note = bias
+                    ? `Forecast ${bias.forecast} vs Previous ${bias.previous}${bias.source ? ' • ' + bias.source : ''}`
+                    : 'Forecast vs Previous flat — wait for the release';
+            }
+            phase = next.phase;
         }
         const quote = FOREX_QUOTES[pair] || null;
         return {
-            pair, rate, dir, note, eventLabel,
+            pair, rate, dir, note, eventLabel, phase, validUntil, noData,
             source: quote && quote.source,
             crossCheckPct: quote && quote.crossCheckPct,
             broker: brokerQuoteFor(pair, now)
@@ -647,6 +736,7 @@ function forexBoardHtml(state) {
         const tpDist = isJpyStyle ? 0.60 : 0.0060;
         const dir = it.dir === 'long' ? 'buy' : it.dir === 'short' ? 'sell' : 'wait';
         const label = dir === 'buy' ? 'BUY' : dir === 'sell' ? 'SELL' : 'WAIT';
+        const suffix = dir === 'wait' ? '' : (it.phase === 'post' ? ' · POST-NEWS' : ' · MARKET');
         const broker = it.broker && !it.broker.stale ? it.broker : null;
         let levels;
         if (dir === 'buy' || dir === 'sell') {
@@ -662,12 +752,12 @@ function forexBoardHtml(state) {
             levels = `<div class="fx-levels"><span>BUY ${fmt(buyRef, dec)}</span><span>SELL ${fmt(sellRef, dec)}</span></div>`;
         }
         return `<div class="fx-card ${dir}">
-            <div class="pair"><span>${esc(it.pair)}</span><span class="fx-badge ${dir}">${label}${dir !== 'wait' ? ' · MARKET' : ''}</span></div>
+            <div class="pair"><span>${esc(it.pair)}</span><span class="fx-badge ${dir}">${label}${suffix}</span></div>
             <div class="fx-price">${fmt(rate, dec)}</div>
             ${brokerLineHtml(it.broker)}
             ${levels}
-            <div class="fx-event">${it.eventLabel ? esc(it.eventLabel) : 'Tidak ada katalis ≥ medium'}</div>
-            ${it.note ? `<div class="fx-note">${esc(it.note)}</div>` : ''}
+            <div class="fx-event">${it.eventLabel ? esc(it.eventLabel) : 'Tidak ada katalis aktif'}</div>
+            ${it.note ? `<div class="fx-note">${esc(it.note)}${it.phase === 'post' && it.validUntil ? ` • valid s/d ${esc(it.validUntil)}` : ''}</div>` : ''}
         </div>`;
     }).join('');
 }
@@ -717,22 +807,27 @@ function indicesBoardState(now = Date.now()) {
 
     const a = analyze(pick.e);
     let dir = (a.dir === 'long' || a.dir === 'short') ? a.dir : null;
-    let note = dir ? `Actual ${pick.e.Actual} vs Forecast ${pick.e.Forecast}` : '';
-    if (!dir) {
-        const bias = preNewsBias(pick.e);
-        if (bias) {
-            dir = bias.dir;
-            note = `Forecast ${bias.forecast} vs Previous ${bias.previous}${bias.source ? ' • ' + bias.source : ''}`;
-        }
+    let note = dir ? a.comparedTo : '';
+    const bias = dir ? null : preNewsBias(pick.e);
+    if (bias) {
+        note = `Forecast ${bias.forecast} vs Previous ${bias.previous}${bias.source ? ' • ' + bias.source : ''}`;
     }
 
     items.forEach(it => {
-        it.dir = dir;
+        it.dir = dir || (bias && bias.dir) || null;
         if (phase === 'post') {
+            const reaction = a.noData ? reactionFor(pick.e, it.symbol) : null;
+            if (reaction && reaction.dir) {
+                it.dir = reaction.dir;
+                it.momPct = reaction.movePct;
+                it.note = `${moveNote('Reaksi harga', reaction.movePct, reaction.minutes)} — Actual tidak dipublikasikan`;
+                return;
+            }
             const mom = momentumFor(pick.e, 'index', it.symbol);
             if (mom && mom.dir) {
                 it.dir = mom.dir;
                 it.momPct = mom.changePct;
+                it.note = `Momentum ${mom.changePct >= 0 ? '+' : ''}${mom.changePct.toFixed(2)}% dari harga pra-rilis`;
             }
         }
     });
@@ -776,11 +871,12 @@ function indicesBoardHtml(state) {
             : '';
         const momHtml = Number.isFinite(mom) ? ` <small style="color:var(--muted);">${mom >= 0 ? '+' : ''}${mom.toFixed(2)}%</small>` : '';
         const eventLine = st.event ? `<div class="idx-event">${esc(st.event)}</div>` : '<div class="idx-event">Tidak ada katalis USD aktif</div>';
-        const noteLine = st.note ? `<div class="idx-note">${esc(st.note)}</div>` : '';
+        const itemNote = it.note || st.note;
+        const noteLine = itemNote ? `<div class="idx-note">${esc(itemNote)}</div>` : '';
         const liveLine = st.status === 'live' ? '<div class="idx-note">⏳ Rilis berlangsung — tunggu impact terkonfirmasi.</div>' : '';
         const postLine = st.phase === 'post' && st.validUntil ? `<div class="idx-note">Post-news • valid s/d ${esc(st.validUntil)}</div>` : '';
         return `<div class="idx-card ${dir}">
-            <div class="pair"><span>${esc(it.symbol)}</span><small>${esc(it.name)}</small><span class="fx-badge ${dir}">${label}${dir !== 'wait' ? ' · MARKET' : ''}${momHtml}</span></div>
+            <div class="pair"><span>${esc(it.symbol)}</span><small>${esc(it.name)}</small><span class="fx-badge ${dir}">${label}${dir === 'wait' ? '' : (st.phase === 'post' ? ' · POST-NEWS' : ' · MARKET')}${momHtml}</span></div>
             <div class="idx-price">${fmt(price)}</div>
             <div class="idx-levels">${changeHtml ? `<span>${changeHtml}</span>` : ''}<span>SL/TP ${it.slPct}% / ${it.tpPct}%</span></div>
             ${levels}
@@ -972,31 +1068,55 @@ function mapPairBias(pair, dir, country) {
     return base === 'USD' ? invertDir(dir) : dir;
 }
 
+// Actual adalah satu-satunya dasar klaim "kejutan ekonomi". Kalau Forecast belum
+// tercetak, bandingkan Actual dengan Previous; kalau Actual tidak ada sama sekali,
+// jangan pernah mengembalikan angka confidence sintetis.
 function analyze(e) {
     const name = (e.Event || e.Category || '').toLowerCase();
     const country = countryCode(e.Country);
     const forecast = num(e.Forecast || e.TEForecast);
+    const previous = num(e.Previous);
     const actual = num(e.Actual);
-    const impact = +e.Importance || 1;
+    const releasedAt = new Date(e.Date).getTime();
+    const released = Number.isFinite(releasedAt) ? releasedAt <= Date.now() : actual !== null;
 
-    if (actual === null || forecast === null) {
-        return { dir: 'wait', score: Math.max(35, 48 - impact * 2), reason: 'Directional signal requires both Actual and Forecast values. Live market quotes below are watch levels until the release prints.' };
+    if (actual === null) {
+        if (!released) {
+            return { dir: 'wait', score: 0, basis: 'forecast-pending', reason: 'Belum rilis — arah hanya bias pra-rilis dari Forecast vs Previous sampai Actual tercetak.' };
+        }
+        return { dir: 'wait', score: 0, noData: true, basis: 'no-actual', reason: 'Rilis sudah lewat tetapi Actual tidak dipublikasikan, jadi kejutan ekonomi tidak bisa dihitung dari kalender.' };
     }
 
-    const surprise = actual - forecast;
-    const threshold = Math.max(Math.abs(forecast) * 0.005, 0.01);
+    const reference = forecast !== null ? { value: forecast, label: 'Forecast' }
+        : previous !== null ? { value: previous, label: 'Previous' } : null;
+    if (!reference) {
+        return { dir: 'wait', score: 0, noData: true, basis: 'no-actual', reason: `Actual ${actual} tercetak tetapi Forecast dan Previous sama-sama kosong — tidak ada pembanding.` };
+    }
+
+    const surprise = actual - reference.value;
+    const threshold = Math.max(Math.abs(reference.value) * 0.005, 0.01);
+    const fmtVal = v => Math.abs(v) >= 1e6 ? `${(v / 1e6).toFixed(2)}M` : Math.abs(v) >= 1e4 ? Math.round(v).toLocaleString('en-US') : v;
+    const comparison = `Actual ${fmtVal(actual)} vs ${reference.label} ${fmtVal(reference.value)}`;
     if (Math.abs(surprise) < threshold) {
-        return { dir: 'wait', score: 45, reason: `Actual ${actual} vs Forecast ${forecast}: no meaningful economic surprise.` };
+        return { dir: 'wait', score: 45, basis: 'flat', reason: `${comparison}: tidak ada kejutan ekonomi yang berarti.` };
     }
 
     const goldBullish = goldBias(name, surprise, country);
     if (goldBullish === null) {
-        return { dir: 'wait', score: 40, reason: `${name} has no predefined XAUUSD economic-impact mapping.` };
+        return { dir: 'wait', score: 40, basis: 'unmapped', reason: `${name} belum punya pemetaan dampak ekonomi untuk XAUUSD.` };
     }
 
     const strength = Math.min(40, Math.round(Math.abs(surprise) / threshold * 10));
     const score = Math.min(95, Math.max(55, 55 + strength));
-    return { dir: goldBullish ? 'long' : 'short', score, reason: `Actual ${actual} vs Forecast ${forecast}. ${goldBullish ? `Data ${country} weaker for USD / stronger for FX → Gold bullish bias.` : `Data ${country} stronger for USD / weaker for FX → Gold bearish bias.`}` };
+    return {
+        dir: goldBullish ? 'long' : 'short',
+        score,
+        surprise,
+        comparedTo: comparison,
+        reference: reference.label,
+        basis: reference.label === 'Forecast' ? 'actual-forecast' : 'actual-previous',
+        reason: `${comparison}. ${goldBullish ? `Data ${country} lebih lemah untuk USD / lebih kuat untuk FX → bias bullish emas.` : `Data ${country} lebih kuat untuk USD / lebih lemah untuk FX → bias bearish emas.`}`
+    };
 }
 
 function normalize(e) {
@@ -1025,9 +1145,14 @@ function tpSl(a, e) {
     if (!LIVE_PRICE) return '';
     const directed = a.dir === 'long' || a.dir === 'short';
     const impact = +e.Importance || 1;
-    if (!directed && impact < 2) return '';
+    const phaseNow = newsPhase(e);
+    const gateFocus = focusPair(e);
+    const gateReaction = phaseNow === 'post' && !directed ? reactionFor(e, gateFocus.pair) : null;
+    const gateMomentum = phaseNow === 'post' && !directed && !(gateReaction && gateReaction.dir) ? momentumFor(e, gateFocus.kind, gateFocus.pair) : null;
+    const gatePreBias = phaseNow === 'pre' && !directed ? preNewsBias(e) : null;
+    if (!directed && impact < 2 && !(gateReaction && gateReaction.dir) && !(gateMomentum && gateMomentum.dir) && !gatePreBias) return '';
 
-    const phase = newsPhase(e);
+    const phase = phaseNow;
     const isPre = phase === 'pre';
     const isPost = phase === 'post';
     const actionOf = d => d === 'long' ? 'BUY' : 'SELL';
@@ -1050,7 +1175,9 @@ function tpSl(a, e) {
     const assets = eventAssets(e);
     const preFxBias = isPre && !directed ? preNewsBias(e) : null;
     const goldMom = isPost && !directed && assets.gold ? momentumFor(e, 'gold') : null;
-    const bias = directed ? a.dir : (goldMom && goldMom.dir ? goldMom.dir : null);
+    const goldReaction = isPost && !directed && assets.gold && !(goldMom && goldMom.dir) ? reactionFor(e, 'XAU/USD') : null;
+    const goldDir = (goldMom && goldMom.dir) || (goldReaction && goldReaction.dir) || null;
+    const bias = directed ? a.dir : goldDir;
     const validUntil = fmtDate(new Date(e.Date)) + ' pukul ' + fmtTime(new Date(e.Date));
     const postValidUntil = fmtDate(postNewsExpiry(e)) + ' ' + fmtTime(postNewsExpiry(e));
 
@@ -1059,7 +1186,7 @@ function tpSl(a, e) {
     if (isPost) {
         html += directed
             ? `<div class="postnews-badge">✅ POST-NEWS ${actionOf(bias)} • arah dari Actual vs Forecast • valid s/d ${postValidUntil}</div>`
-            : `<div class="postnews-badge">✅ POST-NEWS — momentum dihitung per pair dari harga pra-rilis • valid s/d ${postValidUntil}</div>`;
+            : `<div class="postnews-badge">✅ POST-NEWS — arah per pair dari reaksi harga 1 menit / momentum pra-rilis • valid s/d ${postValidUntil}</div>`;
     } else if (bias) {
         html += `<div class="validity">⚠️ Entry pasar riil ${actionOf(bias)} — valid hingga ${validUntil}</div>`;
     }
@@ -1070,7 +1197,8 @@ function tpSl(a, e) {
         const sl = bias === 'long' ? entry * (1 - riskPct / 100) : entry * (1 + riskPct / 100);
         const tp = bias === 'long' ? entry * (1 + rewardPct / 100) : entry * (1 - rewardPct / 100);
 
-        const goldNote = goldMom ? ` • momentum ${goldMom.changePct >= 0 ? '+' : ''}${goldMom.changePct.toFixed(2)}% dari ${f(goldMom.base)}` : '';
+        const goldNote = goldMom ? ` • momentum ${goldMom.changePct >= 0 ? '+' : ''}${goldMom.changePct.toFixed(2)}% dari ${f(goldMom.base)}`
+            : goldReaction ? ` • ${moveNote('reaksi', goldReaction.movePct, goldReaction.minutes)}` : '';
         html += `<div style="display:flex; gap:14px; flex-wrap:wrap;">`;
         html += `<span style="color:#72d4e4; font-weight:bold; width:100%;">XAU/USD (Gold) — ${actionOf(bias)}${goldNote}</span>`;
         html += `<span><b>Entry</b> ${f(entry)}</span><span><b>SL</b> ${f(sl)}</span><span><b>TP</b> ${f(tp)}</span><span><b>R:R</b> 1:2.0</span>`;
@@ -1146,7 +1274,7 @@ function tpSl(a, e) {
         const forexPairs = FOREX_PAIRS;
         const fxStatus = directed
             ? `(${actionOf(a.dir)} • USD ${a.dir === 'long' ? 'Melemah' : 'Menguat'})`
-            : isPost ? '(Momentum per pair)'
+            : isPost ? '(Reaksi & momentum per pair)'
             : preFxBias ? `(PRE-NEWS ${actionOf(preFxBias.dir)} bias)`
             : '(Straddle Level)';
         html += `<div class="forex-container"><span style="color:#72d4e4; font-weight:bold; width:100%;">Forex Majors ${fxStatus}</span>`;
@@ -1163,18 +1291,20 @@ function tpSl(a, e) {
             const pipMultiplier = isJpyStyle ? 100 : 10000;
 
             const pairMom = isPost && !directed && assets.forex.includes(pair) ? momentumFor(e, 'forex', pair) : null;
+            const pairReaction = isPost && !directed && assets.forex.includes(pair) && !(pairMom && pairMom.dir) ? reactionFor(e, pair) : null;
             const pairPreBias = isPre && !directed && assets.forex.includes(pair) && preFxBias ? mapPairBias(pair, preFxBias.dir, e.Country) : null;
             const pairBias = directed
                 ? (assets.forex.includes(pair) ? mapPairBias(pair, a.dir, e.Country) : null)
-                : (pairMom && pairMom.dir ? pairMom.dir : pairPreBias);
+                : ((pairMom && pairMom.dir) || (pairReaction && pairReaction.dir) || pairPreBias);
 
             if (pairBias) {
                 const isLongPair = pairBias === 'long';
                 const fxSl = isLongPair ? rate - slDist : rate + slDist;
                 const fxTp = isLongPair ? rate + tpDist : rate - tpDist;
                 const cls = isLongPair ? 'long' : 'short';
-                const momNote = pairMom ? ` <small style="color:var(--muted);">${pairMom.changePct >= 0 ? '+' : ''}${pairMom.changePct.toFixed(2)}%</small>` : '';
-                const preNote = pairPreBias && !pairMom ? ' <small style="color:var(--amber);">pre-news market</small>' : '';
+                const momNote = pairMom ? ` <small style="color:var(--muted);">${pairMom.changePct >= 0 ? '+' : ''}${pairMom.changePct.toFixed(2)}%</small>`
+                    : pairReaction ? ` <small style="color:var(--muted);">${moveNote('reaksi', pairReaction.movePct, pairReaction.minutes)}</small>` : '';
+                const preNote = pairPreBias && !pairMom && !pairReaction ? ' <small style="color:var(--amber);">pre-news market</small>' : '';
                 html += `<div class="forex-card ${cls}"><div>${pair} <b>${isLongPair ? 'BUY' : 'SELL'}</b>${momNote}${preNote}</div><div class="val">Entry: ${rate.toFixed(dec)}</div><div class="val" style="color:var(--red)">SL: ${fxSl.toFixed(dec)}</div><div class="val" style="color:var(--green)">TP: ${fxTp.toFixed(dec)}</div></div>`;
                 return;
             }
@@ -1209,7 +1339,8 @@ function tpSl(a, e) {
             const bColor = isBTC ? '#f7931a' : '#627eea';
 
             const pairMom = isPost && !directed && assets.crypto ? momentumFor(e, 'crypto', pair) : null;
-            const pairBias = directed ? a.dir : (pairMom && pairMom.dir ? pairMom.dir : null);
+            const pairReaction = isPost && !directed && assets.crypto && !(pairMom && pairMom.dir) ? reactionFor(e, pair) : null;
+            const pairBias = directed ? a.dir : ((pairMom && pairMom.dir) || (pairReaction && pairReaction.dir) || null);
 
             if (pairBias) {
                 const slPct = isBTC ? 1.0 : 1.5;
@@ -1217,7 +1348,8 @@ function tpSl(a, e) {
                 const isLong = pairBias === 'long';
                 const fxSl = isLong ? rate * (1 - slPct / 100) : rate * (1 + slPct / 100);
                 const fxTp = isLong ? rate * (1 + tpPct / 100) : rate * (1 - tpPct / 100);
-                const momNote = pairMom ? ` <small style="color:var(--muted);">${pairMom.changePct >= 0 ? '+' : ''}${pairMom.changePct.toFixed(2)}%</small>` : '';
+                const momNote = pairMom ? ` <small style="color:var(--muted);">${pairMom.changePct >= 0 ? '+' : ''}${pairMom.changePct.toFixed(2)}%</small>`
+                    : pairReaction ? ` <small style="color:var(--muted);">${moveNote('reaksi', pairReaction.movePct, pairReaction.minutes)}</small>` : '';
                 html += `<div class="forex-card ${pairBias}" style="border-left-color: ${bColor};"><div>${pair} <b>${actionOf(pairBias)}</b>${momNote}</div><div class="val">Entry: $${fmt(rate)}</div><div class="val" style="color:var(--red)">SL: $${fmt(fxSl)}</div><div class="val" style="color:var(--green)">TP: $${fmt(fxTp)}</div></div>`;
                 return;
             }
@@ -1253,17 +1385,20 @@ function tpSl(a, e) {
             if (!rate) return;
             let idxDir = indexBias;
             let mom = null;
+            let idxReaction = null;
             if (isPost && !directed) {
                 mom = momentumFor(e, 'index', cfg.symbol);
-                if (mom && mom.dir) idxDir = mom.dir;
+                if (!(mom && mom.dir)) idxReaction = reactionFor(e, cfg.symbol);
+                idxDir = (mom && mom.dir) || (idxReaction && idxReaction.dir) || null;
             }
             if (idxDir) {
                 const isLong = idxDir === 'long';
                 const sl = isLong ? rate * (1 - cfg.slPct / 100) : rate * (1 + cfg.slPct / 100);
                 const tp = isLong ? rate * (1 + cfg.tpPct / 100) : rate * (1 - cfg.tpPct / 100);
                 const cls = isLong ? 'long' : 'short';
-                const momNote = mom ? ` <small style="color:var(--muted);">${mom.changePct >= 0 ? '+' : ''}${mom.changePct.toFixed(2)}%</small>` : '';
-                const preNote = preFxBias && !mom ? ' <small style="color:var(--amber);">pre-news market</small>' : '';
+                const momNote = mom ? ` <small style="color:var(--muted);">${mom.changePct >= 0 ? '+' : ''}${mom.changePct.toFixed(2)}%</small>`
+                    : idxReaction ? ` <small style="color:var(--muted);">${moveNote('reaksi', idxReaction.movePct, idxReaction.minutes)}</small>` : '';
+                const preNote = preFxBias && !mom && !idxReaction ? ' <small style="color:var(--amber);">pre-news market</small>' : '';
                 html += `<div class="forex-card ${cls}" style="border-left-color:${isLong ? 'var(--green)' : 'var(--red)'};"><div>${esc(cfg.symbol)} <b>${isLong ? 'BUY' : 'SELL'}</b>${momNote}${preNote}</div><div class="val">Entry: ${fmtIdx(rate)}</div><div class="val" style="color:var(--red)">SL: ${fmtIdx(sl)}</div><div class="val" style="color:var(--green)">TP: ${fmtIdx(tp)}</div><div class="val" style="color:var(--muted); font-size:9px;">SL/TP ${cfg.slPct}% / ${cfg.tpPct}%</div></div>`;
                 return;
             }
@@ -1289,19 +1424,29 @@ function card(e) {
     const a = analyze(e);
     const phase = newsPhase(e);
     const focus = focusPair(e);
-    const momentum = phase === 'post' && a.dir === 'wait' ? momentumFor(e, focus.kind, focus.pair) : null;
-    const preBias = phase === 'pre' && a.dir === 'wait' && (+e.Importance || 1) >= 2 ? preNewsBias(e) : null;
-    const signalDir = a.dir !== 'wait'
+    const directed = a.dir === 'long' || a.dir === 'short';
+    const reaction = phase === 'post' && !directed && a.noData ? reactionFor(e, focus.pair) : null;
+    const reactionDir = reaction && reaction.dir ? reaction.dir : null;
+    const momentum = phase === 'post' && !directed && !reactionDir ? momentumFor(e, focus.kind, focus.pair) : null;
+    const preBias = phase === 'pre' && !directed && (+e.Importance || 1) >= 2 ? preNewsBias(e) : null;
+    const signalDir = directed
         ? a.dir
-        : (momentum && momentum.dir ? momentum.dir : (preBias ? preBias.dir : 'wait'));
+        : (reactionDir || (momentum && momentum.dir) || (preBias ? preBias.dir : 'wait'));
     const signalLabel = signalDir === 'long' ? 'BUY' : signalDir === 'short' ? 'SELL' : 'WAIT';
-    const signalNote = a.dir === 'wait' && momentum
-        ? `post-news ${momentum.changePct >= 0 ? '+' : ''}${momentum.changePct.toFixed(2)}% (${focus.pair})`
-        : a.dir === 'wait' && preBias
-            ? `pre-news bias${preBias.source ? ' • ' + preBias.source : ''} • Forecast ${preBias.forecast} vs Previous ${preBias.previous}`
-            : `${a.score}% confidence`;
+    const signalNote = directed
+        ? `${phase === 'post' ? 'POST-NEWS' : 'PRE-NEWS'} • ${a.comparedTo} • ${a.score}% confidence`
+        : reactionDir
+            ? `${moveNote('Reaksi harga', reaction.movePct, reaction.minutes)} (${focus.pair}) — Actual tidak dipublikasikan`
+            : momentum && momentum.dir
+                ? `post-news ${momentum.changePct >= 0 ? '+' : ''}${momentum.changePct.toFixed(2)}% (${focus.pair})`
+                : preBias
+                    ? `pre-news bias${preBias.source ? ' • ' + preBias.source : ''} • Forecast ${preBias.forecast} vs Previous ${preBias.previous}`
+                    : a.noData
+                        ? 'NO ACTUAL DATA — arah belum terkonfirmasi'
+                        : 'menunggu Actual';
+    const meterScore = a.noData || a.basis === 'forecast-pending' ? null : a.score;
     const reason = phase === 'post' && a.dir === 'wait'
-        ? `${a.reason} Sinyal BUY/SELL pasca-rilis memakai momentum ${focus.pair || 'pair terkait'} terhadap harga pra-rilisnya; bila arah belum jelas, level breakout dua arah ditampilkan.`
+        ? `${a.reason} Arah pasca-rilis diambil dari reaksi ${focus.pair || 'pair terkait'} terhadap harga pra-rilisnya; bila arah belum jelas, level breakout dua arah ditampilkan.`
         : phase === 'pre' && a.dir === 'wait' && preBias
             ? `${a.reason} Bias pra-rilis memakai Forecast ${preBias.forecast} vs Previous ${preBias.previous}${preBias.source ? ` (dari ${preBias.source})` : ''}; entry market adalah skenario sampai rilis tercetak.`
             : a.reason;
@@ -1320,7 +1465,7 @@ function card(e) {
         </div>
         <div class="expand">
             <div class="reason"><b>shidiqpiy scenario</b><p>${esc(reason)}</p></div>
-            <div class="meter-row"><div class="meter"><i style="--score:${a.score}%;--meter:${color}"></i></div><span class="score" style="--meter:${color}">${a.score}</span></div>
+            <div class="meter-row"><div class="meter"><i style="--score:${meterScore == null ? 0 : meterScore}%;--meter:${color}"></i></div><span class="score" style="--meter:${color}">${meterScore == null ? '—' : meterScore}</span></div>
         </div>
         ${tpSl(a, e)}
     </article>`;
@@ -1424,15 +1569,17 @@ document.querySelector('.filters').addEventListener('click', ev => {
     render();
 });
 
-$('#refresh').onclick = () => { load(); loadForex(); loadBrokerForex(); loadCrypto(); loadIndices(); loadPreNews(); };
+$('#refresh').onclick = () => { load(); loadForex(); loadBrokerForex(); loadCrypto(); loadIndices(); loadPreNews(); loadReaction(); };
 renderGoldBoard();
 renderCryptoBoard();
 renderForexBoard();
 renderIndicesBoard();
-load(); loadForex(); loadBrokerForex(); loadCrypto(); loadIndices(); loadPreNews();
+load(); loadForex(); loadBrokerForex(); loadCrypto(); loadIndices(); loadPreNews(); loadReaction();
 setInterval(() => { loadForex(); loadBrokerForex(); loadCrypto(); loadIndices(); }, 60000);
 // Kalender tidak terlalu sering berubah; cek setiap menit agar event Actual/Actual update muncul otomatis.
 setInterval(load, 60000);
+// reaction.json dibangun workflow dari bar 1 menit; cukup dipoles tiap 5 menit.
+setInterval(loadReaction, 300000);
 </script>
   <script src="scripts/xauusd-price-widget.js?v=202610192017"></script>
 </body>
