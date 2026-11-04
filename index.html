@@ -427,6 +427,7 @@ function brokerQuoteFor(pair, now = Date.now()) {
     const meta = payload.broker && typeof payload.broker === 'object' ? payload.broker : {};
     const at = Date.parse(payload.generatedAt || '');
     const ageMin = Number.isFinite(at) ? Math.max(0, (now - at) / 60000) : null;
+    const maxAgeMs = Number(payload.staleAfterSec) > 0 ? Number(payload.staleAfterSec) * 1000 : BROKER_QUOTE_MAX_AGE_MS;
     return {
         bid, ask, mid: (bid + ask) / 2,
         spreadPips: Number(q.spreadPips),
@@ -435,7 +436,7 @@ function brokerQuoteFor(pair, now = Date.now()) {
         server: meta.server || '',
         accountType: meta.accountType || 'unknown',
         ageMin,
-        stale: ageMin === null || ageMin * 60000 > BROKER_QUOTE_MAX_AGE_MS
+        stale: ageMin === null || ageMin * 60000 > maxAgeMs
     };
 }
 
@@ -445,7 +446,8 @@ function brokerSourceText(now = Date.now()) {
     if (!meta) return '';
     const at = Date.parse(payload.generatedAt || '');
     const ageMin = Number.isFinite(at) ? Math.max(0, Math.round((now - at) / 60000)) : null;
-    const state = ageMin === null || ageMin > BROKER_QUOTE_MAX_AGE_MS / 60000
+    const maxAgeMs = Number(payload.staleAfterSec) > 0 ? Number(payload.staleAfterSec) * 1000 : BROKER_QUOTE_MAX_AGE_MS;
+    const state = ageMin === null || ageMin * 60000 > maxAgeMs
         ? `stale${ageMin === null ? '' : ' ' + ageMin + ' mnt'}`
         : `fresh ${ageMin} mnt`;
     const server = meta.server ? ' ' + meta.server : '';

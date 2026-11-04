@@ -49,8 +49,8 @@ BROKER_HINTS = (
 
 ACCOUNT_TYPES = {0: "demo", 1: "contest", 2: "real"}
 
-# A tick older than this is still written but flagged, so the UI can grey it.
-STALE_TICK_SEC = 15 * 60
+# The public board treats a payload older than this as stale (two missed runs).
+STALE_AFTER_SEC = 30 * 60
 
 
 def utc_now() -> datetime:
@@ -184,7 +184,7 @@ def build_payload(mt5, now: datetime | None = None) -> dict:
         "providers": {
             biz: {"name": company or biz, "status": "ok", "pairs": len(q)}
         },
-        "staleAfterSec": STALE_TICK_SEC,
+        "staleAfterSec": STALE_AFTER_SEC,
     }
 
 
