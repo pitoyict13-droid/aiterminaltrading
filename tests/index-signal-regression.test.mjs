@@ -58,15 +58,22 @@ const preNewsPriceFn = extractFunction('preNewsPrice');
 const eventKeyFn = extractFunction('eventKey');
 const dateEventKeyFn = extractFunction('dateEventKey');
 const postNewsExpiryFn = extractFunction('postNewsExpiry');
+const forecastBiasFn = extractFunction('forecastBias');
+const preNewsBiasFn = extractFunction('preNewsBias');
+const mapPairBiasFn = extractFunction('mapPairBias');
 
 function buildTpSl(livePrice, forexRates, cryptoRates, store, preNews = {}) {
   const body = `
     const WITA = 'Asia/Makassar';
     const POST_NEWS_HOLD_MS = 6 * 60 * 60 * 1000;
     const NEWS_SETTLE_MS = 60 * 1000;
+    const FOREX_PAIRS = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CHF', 'AUD/USD', 'USD/CAD'];
     const fmtDate = d => new Intl.DateTimeFormat('en-IN', { timeZone: WITA, weekday: 'short', day: '2-digit', month: 'short' }).format(d);
     const fmtTime = d => new Intl.DateTimeFormat('en-IN', { timeZone: WITA, hour: '2-digit', minute: '2-digit', hour12: false }).format(d) + ' WITA';
+    const esc = s => String(s ?? '');
+    ${numFn}
     ${countryFn}
+    ${biasFn}
     ${normalizeSnapshotFn}
     ${dateEventKeyFn}
     ${eventKeyFn}
@@ -80,6 +87,9 @@ function buildTpSl(livePrice, forexRates, cryptoRates, store, preNews = {}) {
     ${eventAssetsFn}
     ${focusPairFn}
     ${postNewsExpiryFn}
+    ${forecastBiasFn}
+    ${preNewsBiasFn}
+    ${mapPairBiasFn}
     ${tpSlFn}
     return tpSl;
   `;
@@ -165,6 +175,51 @@ assert.match(straddleHtml, /STRADDLE/);
 assert.match(straddleHtml, /BUY/);
 assert.match(straddleHtml, /TP/);
 
+// Pre-news forex majors: explicit market BUY/SELL bias from Forecast vs Previous.
+const futureEurCpi = {
+  Date: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+  Event: 'CPI Flash Estimate y/y', Country: 'EUR', Importance: 3,
+  Forecast: '4.0%', Previous: '3.8%', Actual: ''
+};
+const eurPre = buildTpSl(4000, forexRates, cryptoRates, noStore)({ dir: 'wait', score: 40 }, futureEurCpi);
+assert.match(eurPre, /PRE-NEWS BUY bias/);
+assert.match(eurPre, /EUR\/USD <b>BUY<\/b>/);
+assert.match(eurPre, /pre-news market/);
+assert.match(eurPre, /Entry market pra-rilis BUY/);
+assert.doesNotMatch(eurPre, /XAU\/USD/);
+assert.doesNotMatch(eurPre, /BTC\/USD/);
+
+const futureUsdCpi = { ...futureEurCpi, Event: 'CPI', Country: 'USD', Forecast: '3.2%', Previous: '3.0%' };
+const usdPre = buildTpSl(4000, forexRates, cryptoRates, noStore)({ dir: 'wait', score: 40 }, futureUsdCpi);
+assert.match(usdPre, /PRE-NEWS SELL bias/);
+assert.match(usdPre, /EUR\/USD <b>SELL<\/b>/);
+assert.match(usdPre, /GBP\/USD <b>SELL<\/b>/);
+assert.match(usdPre, /USD\/JPY <b>BUY<\/b>/);
+assert.match(usdPre, /USD\/CHF <b>BUY<\/b>/);
+assert.match(usdPre, /pre-news market/);
+// Crypto still waits for post-news momentum; gold keeps its pre-news straddle.
+assert.match(usdPre, /BTC\/USD <b style="color:var\(--amber\)">STRADDLE<\/b>/);
+assert.match(usdPre, /STRATEGI STRADDLE \(OCO\)/);
+
+const futureGbp = { ...futureEurCpi, Event: 'CPI y/y', Country: 'GBP', Forecast: '3.0%', Previous: '3.2%' };
+const gbpPre = buildTpSl(4000, forexRates, cryptoRates, noStore)({ dir: 'wait', score: 40 }, futureGbp);
+assert.match(gbpPre, /GBP\/USD <b>SELL<\/b>/);
+assert.match(gbpPre, /USD\/JPY <b style="color:var\(--amber\)">STRADDLE<\/b>/);
+assert.doesNotMatch(gbpPre, /EUR\/USD <b>BUY<\/b>/);
+
+// Pure Forecast-vs-Previous bias and pair orientation mapping.
+const forecastBias = new Function(`${numFn}\n${countryFn}\n${biasFn}\n${forecastBiasFn}\nreturn forecastBias;`)();
+assert.equal(forecastBias({ Event: 'CPI', Country: 'USD', Forecast: '3.2%', Previous: '3.0%' }).dir, 'short');
+assert.equal(forecastBias({ Event: 'CPI', Country: 'EUR', Forecast: '4.0%', Previous: '3.8%' }).dir, 'long');
+assert.equal(forecastBias({ Event: 'CPI', Country: 'USD', Forecast: '3.0%', Previous: '3.0%' }), null);
+assert.equal(forecastBias({ Event: 'CPI', Country: 'USD', Forecast: '', Previous: '3.0%' }), null);
+
+const mapPairBias = new Function(`${mapPairBiasFn}\nreturn mapPairBias;`)();
+assert.equal(mapPairBias('EUR/USD', 'short'), 'short');
+assert.equal(mapPairBias('USD/JPY', 'short'), 'long');
+assert.equal(mapPairBias('USD/CAD', 'long'), 'short');
+assert.equal(mapPairBias('EUR/USD', 'wait'), null);
+
 const liveHtml = buildTpSl(4000, forexRates, cryptoRates, noStore)({ dir: 'wait', score: 40 }, { ...pastUsd, Date: new Date(Date.now() - 30 * 1000).toISOString() });
 assert.match(liveHtml, /Rilis berlangsung/);
 
@@ -207,6 +262,36 @@ assert.match(boardEmpty, /Menunggu harga crypto/);
 assert.doesNotMatch(boardEmpty, /NaN|\$undefined/);
 
 console.log('Passed global crypto board tests');
+
+// Global forex board: always visible outside event cards.
+const forexBoardStart = source.indexOf('id="forexBoard"');
+assert.ok(forexBoardStart > -1, 'forex board section missing');
+assert.ok(forexBoardStart < calendarStart, 'forex board must render before the calendar');
+
+const forexBoardFn = extractFunction('forexBoardHtml');
+const forexBoardHtml = new Function(`const esc = s => String(s ?? '');\n${forexBoardFn}\nreturn forexBoardHtml;`)();
+
+const fxBoard = forexBoardHtml({ items: [
+  { pair: 'EUR/USD', rate: 1.08696, dir: 'long', eventLabel: 'CPI · Kam 05 Nov 12:00 WITA', note: 'Forecast 4 vs Previous 3.8' },
+  { pair: 'USD/JPY', rate: 157.88, dir: 'short', eventLabel: 'NFP · Jum 06 Nov 20:30 WITA', note: 'Forecast 65K vs Previous 29K' },
+  { pair: 'USD/CAD', rate: 1.36, dir: null, eventLabel: '' }
+] });
+assert.match(fxBoard, /EUR\/USD/);
+assert.match(fxBoard, /BUY · MARKET/);
+assert.match(fxBoard, /Entry 1\.08696/);
+assert.match(fxBoard, /USD\/JPY/);
+assert.match(fxBoard, /SELL · MARKET/);
+assert.match(fxBoard, /Entry 157\.880/);
+assert.match(fxBoard, /USD\/CAD/);
+assert.match(fxBoard, /WAIT/);
+assert.match(fxBoard, /Tidak ada katalis/);
+assert.doesNotMatch(fxBoard, /NaN|undefined/);
+
+const fxBoardEmpty = forexBoardHtml({ items: [] });
+assert.match(fxBoardEmpty, /Menunggu data forex/);
+assert.doesNotMatch(fxBoardEmpty, /NaN|undefined/);
+
+console.log('Passed global forex board tests');
 
 // Global gold board: always visible outside event cards.
 const goldStart = source.indexOf('id="goldBoard"');

@@ -64,7 +64,25 @@
     .crypto-card .price { font: 800 22px Manrope; margin: 4px 0 2px; }
     .crypto-card .meta { color: var(--muted); font-size: 11px; }
     .crypto-card .meta .sep { opacity: .5; margin: 0 3px; }
-    @media(max-width:760px){ .crypto-board,.market-board { grid-template-columns: 1fr; } .crypto-grid,.mb-levels { grid-template-columns: 1fr; } }
+    .forex-board { margin-top: 18px; border-radius: 26px; padding: 18px 22px; display: grid; grid-template-columns: minmax(210px, .85fr) 2fr; gap: 18px; align-items: center; }
+    .forex-board h3 { font: 800 19px Manrope; margin: 4px 0 3px; letter-spacing: -.4px; }
+    .forex-board p { margin: 0; color: var(--muted); font-size: 12px; max-width: 340px; }
+    .fx-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .fx-card { background: rgba(4,15,23,.42); border: 1px solid var(--line); border-left: 3px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+    .fx-card.buy { border-left-color: var(--green); }
+    .fx-card.sell { border-left-color: var(--red); }
+    .fx-card.wait { border-left-color: var(--amber); }
+    .fx-card .pair { display: flex; justify-content: space-between; align-items: center; gap: 8px; font: 800 14px Manrope; }
+    .fx-badge { display: inline-block; padding: 3px 8px; border-radius: 999px; font: 800 10px "DM Sans",sans-serif; letter-spacing: .4px; }
+    .fx-badge.buy { background: rgba(24,209,154,.16); color: var(--green); }
+    .fx-badge.sell { background: rgba(255,100,125,.16); color: var(--red); }
+    .fx-badge.wait { background: rgba(242,184,75,.16); color: var(--amber); }
+    .fx-price { font: 800 22px Manrope; letter-spacing: -.5px; margin: 4px 0 6px; }
+    .fx-levels { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 11px; color: #dff5fb; }
+    .fx-levels span { background: rgba(4,14,21,.42); padding: 3px 7px; border-radius: 7px; }
+    .fx-event { margin-top: 7px; color: #cfe9ef; font-size: 10.5px; font-weight: 600; }
+    .fx-note { margin-top: 3px; color: var(--muted); font-size: 9.5px; }
+    @media(max-width:760px){ .crypto-board,.market-board,.forex-board { grid-template-columns: 1fr; } .crypto-grid,.mb-levels,.fx-grid { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body><main class="shell">
@@ -100,6 +118,14 @@
     </div>
     <div class="crypto-grid" id="cryptoGrid"></div>
   </section>
+  <section class="forex-board glass" id="forexBoard">
+    <div>
+      <div class="eyebrow">Forex watch</div>
+      <h3>Forex Majors</h3>
+      <p>Pre-news market entry bias for EUR/USD, GBP/USD, USD/JPY, USD/CHF, AUD/USD and USD/CAD. BUY/SELL comes from Forecast vs Previous on the next medium/high-impact event; it is a scenario, not a prediction.</p>
+    </div>
+    <div class="fx-grid" id="fxGrid"></div>
+  </section>
   <nav class="toolbar glass"><div class="filters"><button class="chip active" data-filter="all">Full month</button><button class="chip" data-filter="upcoming">Upcoming</button><button class="chip" data-filter="high">High impact</button></div><span class="status" id="status">Loading calendar…</span><button class="refresh" id="refresh">↻ Refresh</button></nav>
   <div class="section-head"><div><h3 id="monthTitle">Economic calendar</h3><p>Oldest to newest • times shown in WITA</p></div></div>
   <section id="calendar" class="timeline"></section>
@@ -126,6 +152,7 @@ function countryCode(c) {
     return ({ 'UNITED STATES': 'USD', US: 'USD', USA: 'USD', CANADA: 'CAD', CA: 'CAD', EUROZONE: 'EUR', 'EURO AREA': 'EUR', UK: 'GBP', 'UNITED KINGDOM': 'GBP', JAPAN: 'JPY', AUSTRALIA: 'AUD', 'NEW ZEALAND': 'NZD' }[u] || u);
 }
 const WITA = 'Asia/Makassar';
+const FOREX_PAIRS = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CHF', 'AUD/USD', 'USD/CAD'];
 
 let events = [], filter = 'all', timer;
 let LIVE_PRICE = null;
@@ -386,6 +413,73 @@ function renderCryptoBoard() {
     if (grid) grid.innerHTML = cryptoBoardHtml(CRYPTO_RATES, CRYPTO_CHANGE);
 }
 
+function nextPairEvent(pair, now = Date.now()) {
+    const currencies = String(pair).split('/');
+    return events
+        .filter(e => (+e.Importance || 1) >= 2 && currencies.includes(countryCode(e.Country)))
+        .map(e => ({ e, t: new Date(e.Date).getTime() }))
+        .filter(x => Number.isFinite(x.t) && x.t > now)
+        .sort((a, b) => a.t - b.t)[0] || null;
+}
+
+function forexBoardState(now = Date.now()) {
+    const items = FOREX_PAIRS.map(pair => {
+        const rate = pairRate(pair);
+        const next = nextPairEvent(pair, now);
+        let dir = null, note = '', eventLabel = '';
+        if (next) {
+            const bias = preNewsBias(next.e);
+            if (bias) dir = mapPairBias(pair, bias.dir);
+            eventLabel = `${next.e.Event} · ${fmtDate(new Date(next.e.Date))} ${fmtTime(new Date(next.e.Date))}`;
+            note = bias
+                ? `Forecast ${bias.forecast} vs Previous ${bias.previous}${bias.source ? ' • ' + bias.source : ''}`
+                : 'Forecast vs Previous flat — wait for the release';
+        }
+        return { pair, rate, dir, note, eventLabel };
+    });
+    return { items };
+}
+
+function forexBoardHtml(state) {
+    const items = state && Array.isArray(state.items) ? state.items : [];
+    if (!items.length) return '<div class="fx-card wait"><div class="pair"><span>Forex Majors</span></div><div class="fx-note">Menunggu data forex…</div></div>';
+    const fmt = (n, dec) => Number(n).toFixed(dec);
+    return items.map(it => {
+        const rate = Number(it.rate);
+        if (!Number.isFinite(rate) || rate <= 0) {
+            return `<div class="fx-card wait"><div class="pair"><span>${esc(it.pair)}</span><span class="fx-badge wait">WAIT</span></div><div class="fx-price">—</div><div class="fx-note">Menunggu harga live…</div></div>`;
+        }
+        const isJpyStyle = rate > 10;
+        const dec = isJpyStyle ? 3 : 5;
+        const slDist = isJpyStyle ? 0.30 : 0.0030;
+        const tpDist = isJpyStyle ? 0.60 : 0.0060;
+        const dir = it.dir === 'long' ? 'buy' : it.dir === 'short' ? 'sell' : 'wait';
+        const label = dir === 'buy' ? 'BUY' : dir === 'sell' ? 'SELL' : 'WAIT';
+        let levels;
+        if (dir === 'buy' || dir === 'sell') {
+            const isLong = dir === 'buy';
+            const sl = isLong ? rate - slDist : rate + slDist;
+            const tp = isLong ? rate + tpDist : rate - tpDist;
+            levels = `<div class="fx-levels"><span>Entry ${fmt(rate, dec)}</span><span>SL ${fmt(sl, dec)}</span><span>TP ${fmt(tp, dec)}</span></div>`;
+        } else {
+            const buffer = isJpyStyle ? 0.15 : 0.0015;
+            levels = `<div class="fx-levels"><span>BUY ${fmt(rate + buffer, dec)}</span><span>SELL ${fmt(rate - buffer, dec)}</span></div>`;
+        }
+        return `<div class="fx-card ${dir}">
+            <div class="pair"><span>${esc(it.pair)}</span><span class="fx-badge ${dir}">${label}${dir !== 'wait' ? ' · MARKET' : ''}</span></div>
+            <div class="fx-price">${fmt(rate, dec)}</div>
+            ${levels}
+            <div class="fx-event">${it.eventLabel ? esc(it.eventLabel) : 'Tidak ada katalis ≥ medium'}</div>
+            ${it.note ? `<div class="fx-note">${esc(it.note)}</div>` : ''}
+        </div>`;
+    }).join('');
+}
+
+function renderForexBoard() {
+    const grid = $('#fxGrid');
+    if (grid) grid.innerHTML = forexBoardHtml(forexBoardState());
+}
+
 async function loadCrypto() {
     const apply = (btc, eth, btcChg, ethChg) => {
         const b = Number(btc), e = Number(eth);
@@ -436,6 +530,50 @@ function goldBias(name, surprise, country) {
     if (laborSoft) return surprise < 0;
     if (usdSoftIfHigh) return surprise > 0;
     return null;
+}
+
+// Pre-news bias: Forecast vs Previous is the only directional information available before a release.
+// "long" = USD weaker / non-USD currency stronger, "short" = USD stronger / non-USD currency weaker.
+function forecastBias(e) {
+    const name = (e.Event || e.Category || '').toLowerCase();
+    const country = countryCode(e.Country);
+    const forecast = num(e.Forecast || e.TEForecast);
+    const previous = num(e.Previous);
+    if (forecast === null || previous === null) return null;
+    const surprise = forecast - previous;
+    const threshold = Math.max(Math.abs(previous) * 0.001, 0.005);
+    if (Math.abs(surprise) < threshold) return null;
+    const bullish = goldBias(name, surprise, country);
+    if (bullish === null) return null;
+    return { dir: bullish ? 'long' : 'short', forecast, previous, surprise };
+}
+
+// When this event's own Forecast equals Previous, borrow the nearest same-currency
+// medium/high-impact expectation (within 6 hours) so the board can still show a bias.
+function preNewsBias(e) {
+    const own = forecastBias(e);
+    if (own) return own;
+    const pool = (typeof events !== 'undefined' && Array.isArray(events)) ? events : [];
+    const country = countryCode(e.Country);
+    const t = new Date(e.Date).getTime();
+    if (!Number.isFinite(t) || !pool.length) return null;
+    const now = Date.now();
+    const near = pool
+        .filter(o => o && !(o.Date === e.Date && o.Event === e.Event))
+        .filter(o => countryCode(o.Country) === country && (+o.Importance || 1) >= 2)
+        .map(o => ({ o, t: new Date(o.Date).getTime() }))
+        .filter(x => Number.isFinite(x.t) && x.t > now && Math.abs(x.t - t) <= 6 * 60 * 60 * 1000)
+        .map(x => ({ ...x, b: forecastBias(x.o) }))
+        .filter(x => x.b)
+        .sort((a, b) => (Math.abs(a.t - t) - Math.abs(b.t - t)) || ((+b.o.Importance || 1) - (+a.o.Importance || 1)));
+    if (!near.length) return null;
+    return { ...near[0].b, source: near[0].o.Event };
+}
+
+// Map the event bias to a pair: "long" means buy XXX/USD, but sell USD/XXX.
+function mapPairBias(pair, dir) {
+    if (dir !== 'long' && dir !== 'short') return null;
+    return String(pair).startsWith('USD/') ? (dir === 'short' ? 'long' : 'short') : dir;
 }
 
 function analyze(e) {
@@ -511,6 +649,7 @@ function tpSl(a, e) {
     }
 
     const assets = eventAssets(e);
+    const preFxBias = isPre && !directed ? preNewsBias(e) : null;
     const goldMom = isPost && !directed && assets.gold ? momentumFor(e, 'gold') : null;
     const bias = directed ? a.dir : (goldMom && goldMom.dir ? goldMom.dir : null);
     const validUntil = fmtDate(new Date(e.Date)) + ' pukul ' + fmtTime(new Date(e.Date));
@@ -605,9 +744,16 @@ function tpSl(a, e) {
     }
 
     if (Object.keys(FOREX_RATES).length > 0) {
-        const forexPairs = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CHF', 'AUD/USD', 'USD/CAD'];
-        const fxStatus = directed ? `(${actionOf(a.dir)} • USD ${a.dir === 'long' ? 'Melemah' : 'Menguat'})` : isPost ? '(Momentum per pair)' : '(Straddle Level)';
+        const forexPairs = FOREX_PAIRS;
+        const fxStatus = directed
+            ? `(${actionOf(a.dir)} • USD ${a.dir === 'long' ? 'Melemah' : 'Menguat'})`
+            : isPost ? '(Momentum per pair)'
+            : preFxBias ? `(PRE-NEWS ${actionOf(preFxBias.dir)} bias)`
+            : '(Straddle Level)';
         html += `<div class="forex-container"><span style="color:#72d4e4; font-weight:bold; width:100%;">Forex Majors ${fxStatus}</span>`;
+        if (isPre && preFxBias) {
+            html += `<div class="validity">⚡ Entry market pra-rilis ${actionOf(preFxBias.dir)} — Forecast ${preFxBias.forecast} vs Previous ${preFxBias.previous}${preFxBias.source ? ' (' + esc(preFxBias.source) + ')' : ''} • berlaku s/d ${validUntil}</div>`;
+        }
         forexPairs.forEach(pair => {
             const rate = pairRate(pair);
             if (!rate) return;
@@ -618,9 +764,10 @@ function tpSl(a, e) {
             const pipMultiplier = isJpyStyle ? 100 : 10000;
 
             const pairMom = isPost && !directed && assets.forex.includes(pair) ? momentumFor(e, 'forex', pair) : null;
+            const pairPreBias = isPre && !directed && assets.forex.includes(pair) && preFxBias ? mapPairBias(pair, preFxBias.dir) : null;
             const pairBias = directed
-                ? (pair.startsWith('USD/') ? (a.dir === 'short' ? 'long' : 'short') : a.dir)
-                : (pairMom && pairMom.dir ? pairMom.dir : null);
+                ? (assets.forex.includes(pair) ? mapPairBias(pair, a.dir) : null)
+                : (pairMom && pairMom.dir ? pairMom.dir : pairPreBias);
 
             if (pairBias) {
                 const isLongPair = pairBias === 'long';
@@ -628,7 +775,8 @@ function tpSl(a, e) {
                 const fxTp = isLongPair ? rate + tpDist : rate - tpDist;
                 const cls = isLongPair ? 'long' : 'short';
                 const momNote = pairMom ? ` <small style="color:var(--muted);">${pairMom.changePct >= 0 ? '+' : ''}${pairMom.changePct.toFixed(2)}%</small>` : '';
-                html += `<div class="forex-card ${cls}"><div>${pair} <b>${isLongPair ? 'BUY' : 'SELL'}</b>${momNote}</div><div class="val">Entry: ${rate.toFixed(dec)}</div><div class="val" style="color:var(--red)">SL: ${fxSl.toFixed(dec)}</div><div class="val" style="color:var(--green)">TP: ${fxTp.toFixed(dec)}</div></div>`;
+                const preNote = pairPreBias && !pairMom ? ' <small style="color:var(--amber);">pre-news market</small>' : '';
+                html += `<div class="forex-card ${cls}"><div>${pair} <b>${isLongPair ? 'BUY' : 'SELL'}</b>${momNote}${preNote}</div><div class="val">Entry: ${rate.toFixed(dec)}</div><div class="val" style="color:var(--red)">SL: ${fxSl.toFixed(dec)}</div><div class="val" style="color:var(--green)">TP: ${fxTp.toFixed(dec)}</div></div>`;
                 return;
             }
 
@@ -701,14 +849,21 @@ function card(e) {
     const phase = newsPhase(e);
     const focus = focusPair(e);
     const momentum = phase === 'post' && a.dir === 'wait' ? momentumFor(e, focus.kind, focus.pair) : null;
-    const signalDir = a.dir !== 'wait' ? a.dir : (momentum && momentum.dir ? momentum.dir : 'wait');
+    const preBias = phase === 'pre' && a.dir === 'wait' && (+e.Importance || 1) >= 2 ? preNewsBias(e) : null;
+    const signalDir = a.dir !== 'wait'
+        ? a.dir
+        : (momentum && momentum.dir ? momentum.dir : (preBias ? preBias.dir : 'wait'));
     const signalLabel = signalDir === 'long' ? 'BUY' : signalDir === 'short' ? 'SELL' : 'WAIT';
     const signalNote = a.dir === 'wait' && momentum
         ? `post-news ${momentum.changePct >= 0 ? '+' : ''}${momentum.changePct.toFixed(2)}% (${focus.pair})`
-        : `${a.score}% confidence`;
+        : a.dir === 'wait' && preBias
+            ? `pre-news bias • Forecast ${preBias.forecast} vs Previous ${preBias.previous}`
+            : `${a.score}% confidence`;
     const reason = phase === 'post' && a.dir === 'wait'
         ? `${a.reason} Sinyal BUY/SELL pasca-rilis memakai momentum ${focus.pair || 'pair terkait'} terhadap harga pra-rilisnya; bila arah belum jelas, level breakout dua arah ditampilkan.`
-        : a.reason;
+        : phase === 'pre' && a.dir === 'wait' && preBias
+            ? `${a.reason} Bias pra-rilis memakai Forecast ${preBias.forecast} vs Previous ${preBias.previous}${preBias.source ? ` (dari ${preBias.source})` : ''}; entry market adalah skenario sampai rilis tercetak.`
+            : a.reason;
     const color = signalDir === 'long' ? 'var(--green)' : signalDir === 'short' ? 'var(--red)' : 'var(--amber)';
     return `<article class="event glass">
         <div class="event-title">
@@ -802,6 +957,7 @@ function render() {
     }
     updateCountdown(next);
     renderGoldBoard();
+    renderForexBoard();
 }
 
 function updateCountdown(next) {
@@ -829,6 +985,7 @@ document.querySelector('.filters').addEventListener('click', ev => {
 $('#refresh').onclick = () => { load(); loadForex(); loadCrypto(); loadPreNews(); };
 renderGoldBoard();
 renderCryptoBoard();
+renderForexBoard();
 load(); loadForex(); loadCrypto(); loadPreNews();
 setInterval(() => { loadForex(); loadCrypto(); }, 60000);
 </script>
