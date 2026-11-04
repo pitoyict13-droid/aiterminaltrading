@@ -74,6 +74,13 @@ jobs:
             echo "Tidak ada file yang berubah untuk di-commit setelah update."
           else
             git commit -m "chore: refresh live calendar, gold, forex & indices $(date -u +%Y%m%d-%H%M)"
-            git pull --rebase --autostash
-            git push
+            for i in 1 2 3; do
+              git pull --rebase --autostash || true
+              if git push; then
+                exit 0
+              fi
+              echo "Push attempt $i failed (local MT5 bridge may have pushed); retrying..."
+              sleep 10
+            done
+            exit 1
           fi
