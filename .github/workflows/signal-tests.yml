@@ -20,3 +20,5 @@ jobs:
         run: node tests/index-signal-regression.test.mjs
       - name: Run pre-news snapshot store tests
         run: node tests/prenews.test.mjs
+      - name: Run forex live-source tests
+        run: node tests/forex-source.test.mjs

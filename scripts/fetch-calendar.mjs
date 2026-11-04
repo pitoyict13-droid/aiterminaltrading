@@ -5,6 +5,36 @@ const PRE_NEWS_FILE = 'data/prenews.json';
 const PRE_NEWS_HOLD_MS = 7 * 24 * 60 * 60 * 1000;
 const PRE_NEWS_WINDOW_MS = 2 * 60 * 60 * 1000;
 const FOREX_SYMBOLS = ['EUR', 'GBP', 'JPY', 'CHF', 'AUD', 'CAD'];
+const FOREX_PAIRS = [
+  ['EUR/USD', 'EURUSD'],
+  ['GBP/USD', 'GBPUSD'],
+  ['USD/JPY', 'USDJPY'],
+  ['USD/CHF', 'USDCHF'],
+  ['AUD/USD', 'AUDUSD'],
+  ['USD/CAD', 'USDCAD'],
+  ['GBP/JPY', 'GBPJPY'],
+  ['EUR/JPY', 'EURJPY']
+];
+
+// OANDA adalah anchor harga live. Broker lain dipakai sebagai cross-check.
+// GO Markets, FBS dan CMC Markets tidak membuka endpoint quote publik, jadi
+// ketiganya tetap dicoba (kalau feed-nya tersedia) dan statusnya dilaporkan.
+export const FOREX_FEEDS = [
+  { id: 'OANDA', name: 'OANDA', prefix: 'OANDA' },
+  { id: 'GOMARKETS', name: 'GO Markets', prefix: 'GOMARKETS' },
+  { id: 'CMCMARKETS', name: 'CMC Markets', prefix: 'CMCMARKETS' },
+  { id: 'FBS', name: 'FBS', prefix: 'FBS' },
+  { id: 'SAXO', name: 'Saxo', prefix: 'SAXO' },
+  { id: 'FOREXCOM', name: 'FOREX.com', prefix: 'FOREXCOM' },
+  { id: 'CAPITALCOM', name: 'Capital.com', prefix: 'CAPITALCOM' },
+  { id: 'PEPPERSTONE', name: 'Pepperstone', prefix: 'PEPPERSTONE' },
+  { id: 'VANTAGE', name: 'Vantage', prefix: 'VANTAGE' },
+  { id: 'FPMARKETS', name: 'FP Markets', prefix: 'FPMARKETS' },
+  { id: 'EIGHTCAP', name: 'Eightcap', prefix: 'EIGHTCAP' },
+  { id: 'BLACKBULL', name: 'BlackBull Markets', prefix: 'BLACKBULL' },
+  { id: 'THINKMARKETS', name: 'ThinkMarkets', prefix: 'THINKMARKETS' },
+  { id: 'SKILLING', name: 'Skilling', prefix: 'SKILLING' }
+];
 const INDICES = [
   { symbol: 'NAS100', name: 'Nasdaq 100', yahoo: '^NDX' },
   { symbol: 'US500', name: 'S&P 500', yahoo: '^GSPC' }
@@ -124,20 +154,162 @@ async function fetchMarket() {
   return null;
 }
 
+export function parseTradingViewForex(payload) {
+  const feeds = {};
+  const rows = payload && Array.isArray(payload.data) ? payload.data : [];
+  for (const row of rows) {
+    const [feed, symbol] = String(row && row.s || '').split(':');
+    if (!feed || !symbol) continue;
+    if (!FOREX_FEEDS.some(f => f.id === feed)) continue;
+    const pair = FOREX_PAIRS.find(([, s]) => s === symbol);
+    if (!pair) continue;
+    const price = Number(row.d && row.d[1]);
+    if (!Number.isFinite(price) || price <= 0) continue;
+    const change = Number(row.d && row.d[2]);
+    (feeds[feed] ||= {})[pair[0]] = {
+      price,
+      changePct: Number.isFinite(change) ? change : null
+    };
+  }
+  return feeds;
+}
+
+function median(values) {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+export function ratesFromQuotes(quotes) {
+  const rates = { USD: 1 };
+  for (const [pair, quote] of Object.entries(quotes || {})) {
+    const price = Number(quote && quote.price);
+    if (!Number.isFinite(price) || price <= 0) continue;
+    const [base, term] = pair.split('/');
+    if (!base || !term) continue;
+    if (term === 'USD' && base !== 'USD') rates[base] = 1 / price;
+    else if (base === 'USD' && term !== 'USD') rates[term] = price;
+  }
+  return rates;
+}
+
+export function buildForexPayload(feeds, now = new Date()) {
+  const quotes = {};
+  for (const [pair] of FOREX_PAIRS) {
+    const prices = [];
+    const providers = {};
+    for (const feed of FOREX_FEEDS) {
+      const quote = feeds && feeds[feed.id] && feeds[feed.id][pair];
+      const price = Number(quote && quote.price);
+      if (!Number.isFinite(price) || price <= 0) continue;
+      providers[feed.id] = price;
+      prices.push(price);
+    }
+    if (!prices.length) continue;
+
+    const oanda = Number(feeds && feeds.OANDA && feeds.OANDA[pair] && feeds.OANDA[pair].price);
+    const primary = Number.isFinite(oanda) && oanda > 0;
+    const anchor = primary ? oanda : median(prices);
+    const references = prices.filter(p => Math.abs(p - anchor) > 1e-12);
+    const crossCheckPct = references.length
+      ? Math.max(...references.map(p => (Math.abs(p - anchor) / anchor) * 100))
+      : 0;
+    const change = feeds && feeds.OANDA && feeds.OANDA[pair] && feeds.OANDA[pair].changePct;
+
+    quotes[pair] = {
+      price: anchor,
+      consensus: median(prices),
+      source: primary ? 'OANDA' : 'broker consensus',
+      changePct: Number.isFinite(Number(change)) ? Number(change) : null,
+      crossCheckPct: Number(crossCheckPct.toFixed(3)),
+      providers,
+      updatedAt: now.toISOString()
+    };
+  }
+
+  const providers = {};
+  for (const feed of FOREX_FEEDS) {
+    const count = feeds && feeds[feed.id] ? Object.keys(feeds[feed.id]).length : 0;
+    providers[feed.id] = {
+      name: feed.name,
+      status: count > 0 ? 'ok' : 'unavailable',
+      pairs: count
+    };
+  }
+
+  return {
+    generatedAt: now.toISOString(),
+    source: 'OANDA (TradingView live)',
+    anchor: 'OANDA',
+    quotes,
+    rates: ratesFromQuotes(quotes),
+    providers
+  };
+}
+
+async function fetchTradingViewForex() {
+  const tickers = [];
+  for (const feed of FOREX_FEEDS) {
+    for (const [, symbol] of FOREX_PAIRS) tickers.push(`${feed.prefix}:${symbol}`);
+  }
+  const r = await fetch('https://scanner.tradingview.com/forex/scan', {
+    method: 'POST',
+    headers: {
+      'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+      'content-type': 'application/json',
+      origin: 'https://www.tradingview.com',
+      referer: 'https://www.tradingview.com/'
+    },
+    body: JSON.stringify({
+      symbols: { tickers },
+      columns: ['name', 'close', 'change', 'update_mode']
+    })
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return parseTradingViewForex(await r.json());
+}
+
 async function fetchForex() {
+  try {
+    const feeds = await fetchTradingViewForex();
+    const payload = buildForexPayload(feeds);
+    if (!Object.keys(payload.quotes).length) throw new Error('quote kosong');
+    await fs.writeFile('data/forex.json', JSON.stringify(payload, null, 2));
+    console.log('Berhasil menyimpan forex.json:', Object.entries(payload.quotes)
+      .map(([pair, q]) => `${pair}=${q.price}`)
+      .join(', '));
+    return payload;
+  } catch (e) {
+    console.error('Gagal mengambil harga forex live (TradingView/OANDA)', e.message || e);
+  }
+
+  // Fallback terakhir: kurs harian er-api. Client akan memberi label "harian".
   try {
     const r = await fetch('https://open.er-api.com/v6/latest/USD');
     const j = await r.json();
-    const rates = j && j.rates;
-    if (!rates) return null;
-    const out = {};
+    const sourceRates = j && j.rates;
+    if (!sourceRates) return null;
+    const rates = { USD: 1 };
     for (const s of FOREX_SYMBOLS) {
-      const v = Number(rates[s]);
-      if (Number.isFinite(v) && v > 0) out[s] = v;
+      const v = Number(sourceRates[s]);
+      if (Number.isFinite(v) && v > 0) rates[s] = v;
     }
-    return Object.keys(out).length ? out : null;
+    if (Object.keys(rates).length < 2) return null;
+    const payload = {
+      generatedAt: new Date().toISOString(),
+      source: 'er-api (daily fallback)',
+      anchor: 'er-api',
+      quotes: {},
+      rates,
+      providers: {
+        'er-api': { name: 'open.er-api.com', status: 'fallback', pairs: Object.keys(rates).length - 1 }
+      }
+    };
+    await fs.writeFile('data/forex.json', JSON.stringify(payload, null, 2));
+    console.log('forex.json memakai fallback kurs harian er-api');
+    return payload;
   } catch (e) {
-    console.error('Gagal mengambil kurs forex', e);
+    console.error('Gagal mengambil kurs forex fallback', e);
     return null;
   }
 }
@@ -204,7 +376,8 @@ async function fetchIndices() {
 
 export async function main() {
   const events = await fetchCalendar();
-  const [price, forex, crypto, indices] = await Promise.all([fetchMarket(), fetchForex(), fetchCrypto(), fetchIndices()]);
+  const [price, forexData, crypto, indices] = await Promise.all([fetchMarket(), fetchForex(), fetchCrypto(), fetchIndices()]);
+  const forex = forexData && forexData.rates;
   const indexPrices = indices
     ? Object.fromEntries(indices.map(x => [x.symbol, x.price]))
     : null;

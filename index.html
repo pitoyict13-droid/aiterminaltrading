@@ -68,6 +68,8 @@
     .forex-board h3 { font: 800 19px Manrope; margin: 4px 0 3px; letter-spacing: -.4px; }
     .forex-board p { margin: 0; color: var(--muted); font-size: 12px; max-width: 340px; }
     .fx-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .fx-source { grid-column: 1 / -1; color: var(--muted); font-size: 10px; line-height: 1.45; margin: 0 0 2px; }
+    .fx-source b { color: #dff5fb; }
     .fx-card { background: rgba(4,15,23,.42); border: 1px solid var(--line); border-left: 3px solid var(--line); border-radius: 14px; padding: 12px 14px; }
     .fx-card.buy { border-left-color: var(--green); }
     .fx-card.sell { border-left-color: var(--red); }
@@ -137,7 +139,7 @@
     <div>
       <div class="eyebrow">Forex watch</div>
       <h3>Forex Majors &amp; JPY Crosses</h3>
-      <p>Pre-news market entry bias for EUR/USD, GBP/USD, USD/JPY, USD/CHF, AUD/USD, USD/CAD, GBP/JPY and EUR/JPY. BUY/SELL comes from Forecast vs Previous on the next medium/high-impact event; it is a scenario, not a prediction.</p>
+      <p>Pre-news market entry bias for EUR/USD, GBP/USD, USD/JPY, USD/CHF, AUD/USD, USD/CAD, GBP/JPY and EUR/JPY. Prices use the live OANDA feed (TradingView) with a multi-broker cross-check; GO Markets, FBS and CMC Markets quotes are verified in the broker terminal. BUY/SELL comes from Forecast vs Previous on the next medium/high-impact event; it is a scenario, not a prediction.</p>
     </div>
     <div class="fx-grid" id="fxGrid"></div>
   </section>
@@ -186,6 +188,8 @@ const INDICES = [
 let events = [], filter = 'all', timer;
 let LIVE_PRICE = null;
 let FOREX_RATES = {};
+let FOREX_QUOTES = {};
+let FOREX_META = {};
 let CRYPTO_RATES = {};
 let CRYPTO_CHANGE = {};
 let INDEX_RATES = {};
@@ -349,11 +353,44 @@ async function loadPreNews() {
     } catch (e) { console.log('Pre-news snapshots unavailable', e); }
 }
 
+function applyForexPayload(j, fallbackSource) {
+    if (!j || typeof j !== 'object') return false;
+    const quotes = j.quotes && typeof j.quotes === 'object' ? j.quotes : {};
+    const rates = j.rates && typeof j.rates === 'object' ? j.rates : {};
+    if (!Object.keys(quotes).length && !Object.keys(rates).length) return false;
+    FOREX_QUOTES = quotes;
+    FOREX_RATES = rates;
+    FOREX_META = {
+        source: j.source || fallbackSource || 'unknown',
+        generatedAt: j.generatedAt || null,
+        providers: j.providers && typeof j.providers === 'object' ? j.providers : {}
+    };
+    render();
+    return true;
+}
+
 async function loadForex() {
+    // Sumber utama: OANDA live + cross-check broker dari workflow (data/forex.json).
+    try {
+        const r = await fetch(`data/forex.json?v=${Date.now()}`, { cache: 'no-store' });
+        if (r.ok) {
+            const j = await r.json();
+            if (applyForexPayload(j)) return;
+        }
+    } catch (e) { console.log('Live forex feed unavailable', e); }
+
+    // Fallback terakhir: kurs harian er-api (akan diberi label harian di UI).
     try {
         const r = await fetch('https://open.er-api.com/v6/latest/USD');
         const j = await r.json();
-        if (j.rates) { FOREX_RATES = j.rates; render(); }
+        if (j && j.rates) {
+            applyForexPayload({
+                rates: j.rates,
+                source: 'er-api (daily fallback)',
+                generatedAt: j.time_last_update_utc || null,
+                providers: { 'er-api': { name: 'open.er-api.com', status: 'fallback' } }
+            }, 'er-api');
+        }
     } catch (e) { console.log('Forex API failed', e); }
 }
 
@@ -474,6 +511,23 @@ function nextPairEvent(pair, now = Date.now()) {
         .sort((a, b) => a.t - b.t)[0] || null;
 }
 
+function forexSourceText(meta) {
+    if (!meta || !meta.source) return '';
+    const at = meta.generatedAt ? new Date(meta.generatedAt) : null;
+    const when = at && Number.isFinite(at.getTime())
+        ? ' | diambil ' + new Intl.DateTimeFormat('en-GB', {
+            timeZone: typeof WITA !== 'undefined' ? WITA : 'Asia/Makassar',
+            day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false
+        }).format(at) + ' WITA'
+        : '';
+    const refs = Object.entries(meta.providers || {})
+        .filter(([id, p]) => id !== 'OANDA' && p && p.status === 'ok')
+        .map(([, p]) => p.name)
+        .filter(Boolean)
+        .slice(0, 4);
+    return `Harga acuan ${meta.source}${when}${refs.length ? ' | cross-check ' + refs.join(', ') : ''}. GO Markets, FBS & CMC Markets: cek quote di terminal broker.`;
+}
+
 function forexBoardState(now = Date.now()) {
     const items = FOREX_PAIRS.map(pair => {
         const rate = pairRate(pair);
@@ -487,16 +541,18 @@ function forexBoardState(now = Date.now()) {
                 ? `Forecast ${bias.forecast} vs Previous ${bias.previous}${bias.source ? ' • ' + bias.source : ''}`
                 : 'Forecast vs Previous flat — wait for the release';
         }
-        return { pair, rate, dir, note, eventLabel };
+        const quote = FOREX_QUOTES[pair] || null;
+        return { pair, rate, dir, note, eventLabel, source: quote && quote.source, crossCheckPct: quote && quote.crossCheckPct };
     });
-    return { items };
+    return { items, source: forexSourceText(FOREX_META) };
 }
 
 function forexBoardHtml(state) {
     const items = state && Array.isArray(state.items) ? state.items : [];
-    if (!items.length) return '<div class="fx-card wait"><div class="pair"><span>Forex Majors</span></div><div class="fx-note">Menunggu data forex…</div></div>';
+    const sourceLine = state && state.source ? `<div class="fx-source">${esc(state.source)}</div>` : '';
+    if (!items.length) return sourceLine + '<div class="fx-card wait"><div class="pair"><span>Forex Majors</span></div><div class="fx-note">Menunggu data forex…</div></div>';
     const fmt = (n, dec) => Number(n).toFixed(dec);
-    return items.map(it => {
+    return sourceLine + items.map(it => {
         const rate = Number(it.rate);
         if (!Number.isFinite(rate) || rate <= 0) {
             return `<div class="fx-card wait"><div class="pair"><span>${esc(it.pair)}</span><span class="fx-badge wait">WAIT</span></div><div class="fx-price">—</div><div class="fx-note">Menunggu harga live…</div></div>`;
@@ -869,6 +925,10 @@ function pairRateFrom(rates, pair) {
 }
 
 function pairRate(pair) {
+    const key = String(pair).toUpperCase();
+    const quote = typeof FOREX_QUOTES === 'object' && FOREX_QUOTES ? FOREX_QUOTES[key] : null;
+    const live = Number(quote && quote.price);
+    if (Number.isFinite(live) && live > 0) return live;
     return pairRateFrom(FOREX_RATES, pair);
 }
 

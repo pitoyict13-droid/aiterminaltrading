@@ -38,7 +38,7 @@ jobs:
       - name: Check if data changed
         id: check_diff
         run: |
-          git add data/calendar.json data/market.json data/prenews.json data/indices.json
+          git add data/calendar.json data/market.json data/forex.json data/prenews.json data/indices.json
           if git diff --cached --quiet; then
             echo "Data tidak ada perubahan. Melewati proses commit."
             echo "changed=false" >> $GITHUB_OUTPUT
@@ -73,6 +73,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "Tidak ada file yang berubah untuk di-commit setelah update."
           else
-            git commit -m "chore: refresh live calendar & gold price $(date -u +%Y%m%d-%H%M)"
+            git commit -m "chore: refresh live calendar, gold, forex & indices $(date -u +%Y%m%d-%H%M)"
             git push
           fi

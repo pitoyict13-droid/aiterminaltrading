@@ -263,6 +263,14 @@ assert.ok(Math.abs(pairRateFrom(forexRates, 'EUR/JPY') - 150 / 0.92) < 1e-9);
 assert.equal(pairRateFrom({}, 'GBP/JPY'), null);
 assert.equal(pairRateFrom(forexRates, 'BADPAIR'), null);
 
+// Direct OANDA pair quotes must win over reconstructed USD-base rates.
+const pairRateDirect = new Function('FOREX_QUOTES', 'FOREX_RATES', `${pairRateFromFn}\n${pairRateFn}\nreturn pairRate;`)(
+  { 'EUR/USD': { price: 1.2 } },
+  forexRates
+);
+assert.equal(pairRateDirect('EUR/USD'), 1.2);
+assert.ok(Math.abs(pairRateDirect('GBP/JPY') - 150 / 0.79) < 1e-9);
+
 const liveHtml = buildTpSl(4000, forexRates, cryptoRates, noStore)({ dir: 'wait', score: 40 }, { ...pastUsd, Date: new Date(Date.now() - 30 * 1000).toISOString() });
 assert.match(liveHtml, /Rilis berlangsung/);
 
@@ -333,6 +341,14 @@ assert.doesNotMatch(fxBoard, /NaN|undefined/);
 const fxBoardEmpty = forexBoardHtml({ items: [] });
 assert.match(fxBoardEmpty, /Menunggu data forex/);
 assert.doesNotMatch(fxBoardEmpty, /NaN|undefined/);
+
+const fxBoardSourced = forexBoardHtml({
+  items: [{ pair: 'EUR/USD', rate: 1.12, dir: 'buy' }],
+  source: 'Harga acuan OANDA (TradingView live). GO Markets, FBS & CMC Markets: cek quote di terminal broker.'
+});
+assert.match(fxBoardSourced, /Harga acuan OANDA/);
+assert.match(fxBoardSourced, /GO Markets, FBS & CMC Markets/);
+assert.doesNotMatch(fxBoardSourced, /NaN|undefined/);
 
 console.log('Passed global forex board tests');
 
