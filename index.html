@@ -1431,6 +1431,8 @@ renderForexBoard();
 renderIndicesBoard();
 load(); loadForex(); loadBrokerForex(); loadCrypto(); loadIndices(); loadPreNews();
 setInterval(() => { loadForex(); loadBrokerForex(); loadCrypto(); loadIndices(); }, 60000);
+// Kalender tidak terlalu sering berubah; cek setiap menit agar event Actual/Actual update muncul otomatis.
+setInterval(load, 60000);
 </script>
   <script src="scripts/xauusd-price-widget.js?v=202610192017"></script>
 </body>
