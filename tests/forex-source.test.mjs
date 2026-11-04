@@ -109,7 +109,7 @@ assert.equal(markets.pairs['XAU/USD'].price, 3990);
 assert.equal(markets.pairs['XAU/USD'].source, 'gold-api');
 assert.equal(markets.pairs['BTC/USD'].price, 77000);
 assert.equal(markets.pairs['ETH/USD'].price, 2200);
-assert.equal(markets.pairs['GBP/JPY'].price, 212.8);
+assert.equal(markets.pairs['GBP/JPY'], undefined, 'markets.json only contains pairs needed by Sniper');
 
 // When the primary quote is missing, Yahoo's current price must be used.
 const yahooFallback = buildMarketPayload({
