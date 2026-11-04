@@ -36,7 +36,7 @@ The **Nasdaq 100 & S&P 500** board (`NAS100`, `US500`) follows the same USD cata
 
 `data/forex.json` shape: `{ generatedAt, source, anchor, quotes: { "EUR/USD": { price, consensus, source, changePct, crossCheckPct, providers } }, rates, providers }`. `rates` is USD-base and kept for the pre-news snapshot store; `quotes` is the direct pair price used by the board.
 
-`data/markets.json` is the consolidated market snapshot consumed by the matching **SniperFXBTCETHXAU** board. It contains XAU/USD, BTC/USD, ETH/USD and the seven Sniper FX majors, plus their latest Yahoo Finance 1-minute history. Consumers must read this file instead of calling Binance/Deriv/OANDA directly when they want prices to match this terminal.
+`data/markets.json` is the consolidated market snapshot consumed by the matching **SniperFXBTCETHXAU** board. It contains XAU/USD, BTC/USD, ETH/USD, the seven Sniper FX majors, GBP/JPY, EUR/JPY and the NAS100/US500 indices, plus their latest Yahoo Finance 1-minute history. Consumers must read this file instead of calling Binance/Deriv/OANDA directly when they want prices to match this terminal.
 
 `data/crypto.json` is written as well for convenience: `{ generatedAt, source, pairs: { "BTC/USD": number, "ETH/USD": number } }`.
 

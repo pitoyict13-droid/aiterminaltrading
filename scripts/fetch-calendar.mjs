@@ -414,9 +414,13 @@ const MARKET_SYMBOLS = [
   { pair: 'AUD/USD', yahoo: 'AUDUSD=X' },
   { pair: 'USD/CAD', yahoo: 'USDCAD=X' },
   { pair: 'NZD/USD', yahoo: 'NZDUSD=X' },
+  { pair: 'GBP/JPY', yahoo: 'GBPJPY=X' },
+  { pair: 'EUR/JPY', yahoo: 'EURJPY=X' },
   { pair: 'XAU/USD', yahoo: 'GC=F' },
   { pair: 'BTC/USD', yahoo: 'BTC-USD' },
-  { pair: 'ETH/USD', yahoo: 'ETH-USD' }
+  { pair: 'ETH/USD', yahoo: 'ETH-USD' },
+  { pair: 'NAS100', yahoo: '^NDX' },
+  { pair: 'US500', yahoo: '^GSPC' }
 ];
 const MARKETS_FILE = 'data/markets.json';
 const CRYPTO_FILE = 'data/crypto.json';

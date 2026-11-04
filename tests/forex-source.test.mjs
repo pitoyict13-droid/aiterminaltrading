@@ -86,14 +86,17 @@ assert.equal(rates.JPY, undefined, 'cross rates must not be invented');
 const yahooByPair = {
   'EUR/USD': { bars: [{ k: 100, o: 1.1, h: 1.2, l: 1.0, c: 1.15 }], meta: { regularMarketPrice: 1.13, previousClose: 1.1, regularMarketChangePercent: 2.7 } },
   'XAU/USD': { bars: [{ k: 200, o: 3900, h: 4010, l: 3890, c: 4000 }], meta: { regularMarketPrice: 4015, previousClose: 4000, regularMarketChangePercent: 0.4 } },
-  'NZD/USD': { bars: [{ k: 300, o: 0.56, h: 0.57, l: 0.55, c: 0.565 }], meta: { regularMarketPrice: 0.565, previousClose: 0.55, regularMarketChangePercent: 2.7 } }
+  'NZD/USD': { bars: [{ k: 300, o: 0.56, h: 0.57, l: 0.55, c: 0.565 }], meta: { regularMarketPrice: 0.565, previousClose: 0.55, regularMarketChangePercent: 2.7 } },
+  'NAS100': { bars: [{ k: 400, o: 28000, h: 28200, l: 27900, c: 28180 }], meta: { regularMarketPrice: 28180.26, previousClose: 27989.82, regularMarketChangePercent: 0.68 } },
+  'US500': { bars: [{ k: 500, o: 7500, h: 7570, l: 7490, c: 7568 }], meta: { regularMarketPrice: 7568.92, previousClose: 7541.4, regularMarketChangePercent: 0.36 } }
 };
 const markets = buildMarketPayload({
   price: 3990,
   forex: {
     'EUR/USD': { price: 1.12, source: 'OANDA', changePct: 0.25 },
     'NZD/USD': { price: 0.561, source: 'OANDA', changePct: -0.1 },
-    'GBP/JPY': { price: 212.8, source: 'OANDA', changePct: null }
+    'GBP/JPY': { price: 212.8, source: 'OANDA', changePct: null },
+    'EUR/JPY': { price: 177.61, source: 'OANDA', changePct: null }
   },
   crypto: { source: 'Binance', rates: { 'BTC/USD': 77000, 'ETH/USD': 2200 } },
   yahooByPair,
@@ -109,7 +112,12 @@ assert.equal(markets.pairs['XAU/USD'].price, 3990);
 assert.equal(markets.pairs['XAU/USD'].source, 'gold-api');
 assert.equal(markets.pairs['BTC/USD'].price, 77000);
 assert.equal(markets.pairs['ETH/USD'].price, 2200);
-assert.equal(markets.pairs['GBP/JPY'], undefined, 'markets.json only contains pairs needed by Sniper');
+assert.equal(markets.pairs['GBP/JPY'].price, 212.8);
+assert.equal(markets.pairs['EUR/JPY'].price, 177.61);
+assert.equal(markets.pairs['NAS100'].price, 28180.26);
+assert.equal(markets.pairs['NAS100'].source, 'Yahoo Finance');
+assert.equal(markets.pairs['US500'].price, 7568.92);
+assert.equal(markets.pairs['US500'].source, 'Yahoo Finance');
 
 // When the primary quote is missing, Yahoo's current price must be used.
 const yahooFallback = buildMarketPayload({
