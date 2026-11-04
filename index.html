@@ -80,6 +80,8 @@
     .fx-badge.sell { background: rgba(255,100,125,.16); color: var(--red); }
     .fx-badge.wait { background: rgba(242,184,75,.16); color: var(--amber); }
     .fx-price { font: 800 22px Manrope; letter-spacing: -.5px; margin: 4px 0 6px; }
+    .fx-broker { margin: 0 0 6px; color: #9fdbe8; font-size: 9.5px; font-variant-numeric: tabular-nums; }
+    .fx-broker.stale { color: var(--amber); }
     .fx-levels { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 11px; color: #dff5fb; }
     .fx-levels span { background: rgba(4,14,21,.42); padding: 3px 7px; border-radius: 7px; }
     .fx-event { margin-top: 7px; color: #cfe9ef; font-size: 10.5px; font-weight: 600; }
@@ -139,7 +141,7 @@
     <div>
       <div class="eyebrow">Forex watch</div>
       <h3>Forex Majors &amp; JPY Crosses</h3>
-      <p>Pre-news market entry bias for EUR/USD, GBP/USD, USD/JPY, USD/CHF, AUD/USD, USD/CAD, GBP/JPY and EUR/JPY. Prices use the live OANDA feed (TradingView) with a multi-broker cross-check; GO Markets, FBS and CMC Markets quotes are verified in the broker terminal. BUY/SELL comes from Forecast vs Previous on the next medium/high-impact event; it is a scenario, not a prediction.</p>
+      <p>Pre-news market entry bias for EUR/USD, GBP/USD, USD/JPY, USD/CHF, AUD/USD, USD/CAD, GBP/JPY and EUR/JPY. Prices use the live OANDA feed (TradingView) with a multi-broker cross-check. When the local MT5 bridge is running, the exact broker bid/ask is shown and used for the entry side (ask for BUY, bid for SELL). BUY/SELL comes from Forecast vs Previous on the next medium/high-impact event; it is a scenario, not a prediction.</p>
     </div>
     <div class="fx-grid" id="fxGrid"></div>
   </section>
@@ -190,6 +192,7 @@ let LIVE_PRICE = null;
 let FOREX_RATES = {};
 let FOREX_QUOTES = {};
 let FOREX_META = {};
+let FOREX_BROKER = null;
 let CRYPTO_RATES = {};
 let CRYPTO_CHANGE = {};
 let INDEX_RATES = {};
@@ -394,6 +397,61 @@ async function loadForex() {
     } catch (e) { console.log('Forex API failed', e); }
 }
 
+const BROKER_QUOTE_MAX_AGE_MS = 30 * 60 * 1000;
+
+function applyBrokerPayload(j) {
+    if (!j || typeof j !== 'object') return false;
+    const quotes = j.quotes && typeof j.quotes === 'object' ? j.quotes : {};
+    if (!Object.keys(quotes).length) return false;
+    FOREX_BROKER = j;
+    renderForexBoard();
+    return true;
+}
+
+async function loadBrokerForex() {
+    // Exact broker bid/ask, pushed by the local MT5 bridge on the user's PC.
+    try {
+        const r = await fetch(`data/forex-broker.json?v=${Date.now()}`, { cache: 'no-store' });
+        if (r.ok) applyBrokerPayload(await r.json());
+    } catch (e) { console.log('MT5 broker quote feed unavailable', e); }
+}
+
+function brokerQuoteFor(pair, now = Date.now()) {
+    const payload = FOREX_BROKER;
+    const quotes = payload && payload.quotes;
+    if (!quotes || typeof quotes !== 'object') return null;
+    const q = quotes[String(pair).toUpperCase()];
+    if (!q || typeof q !== 'object') return null;
+    const bid = Number(q.bid), ask = Number(q.ask);
+    if (!Number.isFinite(bid) || !Number.isFinite(ask) || bid <= 0 || ask < bid) return null;
+    const meta = payload.broker && typeof payload.broker === 'object' ? payload.broker : {};
+    const at = Date.parse(payload.generatedAt || '');
+    const ageMin = Number.isFinite(at) ? Math.max(0, (now - at) / 60000) : null;
+    return {
+        bid, ask, mid: (bid + ask) / 2,
+        spreadPips: Number(q.spreadPips),
+        brokerName: meta.name || meta.id || 'MT5',
+        brokerId: meta.id || '',
+        server: meta.server || '',
+        accountType: meta.accountType || 'unknown',
+        ageMin,
+        stale: ageMin === null || ageMin * 60000 > BROKER_QUOTE_MAX_AGE_MS
+    };
+}
+
+function brokerSourceText(now = Date.now()) {
+    const payload = FOREX_BROKER;
+    const meta = payload && payload.broker;
+    if (!meta) return '';
+    const at = Date.parse(payload.generatedAt || '');
+    const ageMin = Number.isFinite(at) ? Math.max(0, Math.round((now - at) / 60000)) : null;
+    const state = ageMin === null || ageMin > BROKER_QUOTE_MAX_AGE_MS / 60000
+        ? `stale${ageMin === null ? '' : ' ' + ageMin + ' mnt'}`
+        : `fresh ${ageMin} mnt`;
+    const server = meta.server ? ' ' + meta.server : '';
+    return `Quote broker ${meta.name || meta.id}${server} (${meta.accountType || 'account'}) ${state}`;
+}
+
 function goldBoardState(now = Date.now()) {
     const usd = events
         .filter(e => countryCode(e.Country) === 'USD' && (+e.Importance || 1) >= 2)
@@ -525,7 +583,7 @@ function forexSourceText(meta) {
         .map(([, p]) => p.name)
         .filter(Boolean)
         .slice(0, 4);
-    return `Harga acuan ${meta.source}${when}${refs.length ? ' | cross-check ' + refs.join(', ') : ''}. GO Markets, FBS & CMC Markets: cek quote di terminal broker.`;
+    return `Harga acuan ${meta.source}${when}${refs.length ? ' | cross-check ' + refs.join(', ') : ''}. Quote broker MT5 tampil per pair bila bridge lokal aktif.`;
 }
 
 function forexBoardState(now = Date.now()) {
@@ -542,11 +600,33 @@ function forexBoardState(now = Date.now()) {
                 : 'Forecast vs Previous flat — wait for the release';
         }
         const quote = FOREX_QUOTES[pair] || null;
-        return { pair, rate, dir, note, eventLabel, source: quote && quote.source, crossCheckPct: quote && quote.crossCheckPct };
+        return {
+            pair, rate, dir, note, eventLabel,
+            source: quote && quote.source,
+            crossCheckPct: quote && quote.crossCheckPct,
+            broker: brokerQuoteFor(pair, now)
+        };
     });
     const source = forexSourceText(FOREX_META);
     const cross = Math.max(0, ...items.map(it => Number(it.crossCheckPct) || 0));
-    return { items, source: source && cross > 0 ? `${source} | deviasi broker maks ${cross.toFixed(3)}%` : source };
+    const broker = brokerSourceText(now);
+    return {
+        items,
+        source: [
+            source && cross > 0 ? `${source} | deviasi broker maks ${cross.toFixed(3)}%` : source,
+            broker
+        ].filter(Boolean).join(' | ')
+    };
+}
+
+function brokerLineHtml(b) {
+    if (!b) return '';
+    const dec = Number(b.ask) > 10 ? 3 : 5;
+    const spread = Number.isFinite(Number(b.spreadPips)) ? ` · spread ${Number(b.spreadPips).toFixed(1)} pip` : '';
+    const age = b.stale
+        ? ` · STALE${Number.isFinite(b.ageMin) ? ' ' + Math.round(b.ageMin) + ' mnt' : ''}`
+        : (Number.isFinite(b.ageMin) ? ` · ${Math.round(b.ageMin)} mnt` : '');
+    return `<div class="fx-broker${b.stale ? ' stale' : ''}">${esc(b.brokerName)}${b.accountType && b.accountType !== 'unknown' ? ' · ' + esc(b.accountType) : ''} · bid ${Number(b.bid).toFixed(dec)} / ask ${Number(b.ask).toFixed(dec)}${spread}${age}</div>`;
 }
 
 function forexBoardHtml(state) {
@@ -565,19 +645,24 @@ function forexBoardHtml(state) {
         const tpDist = isJpyStyle ? 0.60 : 0.0060;
         const dir = it.dir === 'long' ? 'buy' : it.dir === 'short' ? 'sell' : 'wait';
         const label = dir === 'buy' ? 'BUY' : dir === 'sell' ? 'SELL' : 'WAIT';
+        const broker = it.broker && !it.broker.stale ? it.broker : null;
         let levels;
         if (dir === 'buy' || dir === 'sell') {
             const isLong = dir === 'buy';
-            const sl = isLong ? rate - slDist : rate + slDist;
-            const tp = isLong ? rate + tpDist : rate - tpDist;
-            levels = `<div class="fx-levels"><span>Entry ${fmt(rate, dec)}</span><span>SL ${fmt(sl, dec)}</span><span>TP ${fmt(tp, dec)}</span></div>`;
+            const entry = broker ? (isLong ? Number(broker.ask) : Number(broker.bid)) : rate;
+            const sl = isLong ? entry - slDist : entry + slDist;
+            const tp = isLong ? entry + tpDist : entry - tpDist;
+            levels = `<div class="fx-levels"><span>Entry ${fmt(entry, dec)}</span><span>SL ${fmt(sl, dec)}</span><span>TP ${fmt(tp, dec)}</span></div>`;
         } else {
             const buffer = isJpyStyle ? 0.15 : 0.0015;
-            levels = `<div class="fx-levels"><span>BUY ${fmt(rate + buffer, dec)}</span><span>SELL ${fmt(rate - buffer, dec)}</span></div>`;
+            const buyRef = broker ? Number(broker.ask) : rate + buffer;
+            const sellRef = broker ? Number(broker.bid) : rate - buffer;
+            levels = `<div class="fx-levels"><span>BUY ${fmt(buyRef, dec)}</span><span>SELL ${fmt(sellRef, dec)}</span></div>`;
         }
         return `<div class="fx-card ${dir}">
             <div class="pair"><span>${esc(it.pair)}</span><span class="fx-badge ${dir}">${label}${dir !== 'wait' ? ' · MARKET' : ''}</span></div>
             <div class="fx-price">${fmt(rate, dec)}</div>
+            ${brokerLineHtml(it.broker)}
             ${levels}
             <div class="fx-event">${it.eventLabel ? esc(it.eventLabel) : 'Tidak ada katalis ≥ medium'}</div>
             ${it.note ? `<div class="fx-note">${esc(it.note)}</div>` : ''}
@@ -1337,13 +1422,13 @@ document.querySelector('.filters').addEventListener('click', ev => {
     render();
 });
 
-$('#refresh').onclick = () => { load(); loadForex(); loadCrypto(); loadIndices(); loadPreNews(); };
+$('#refresh').onclick = () => { load(); loadForex(); loadBrokerForex(); loadCrypto(); loadIndices(); loadPreNews(); };
 renderGoldBoard();
 renderCryptoBoard();
 renderForexBoard();
 renderIndicesBoard();
-load(); loadForex(); loadCrypto(); loadIndices(); loadPreNews();
-setInterval(() => { loadForex(); loadCrypto(); loadIndices(); }, 60000);
+load(); loadForex(); loadBrokerForex(); loadCrypto(); loadIndices(); loadPreNews();
+setInterval(() => { loadForex(); loadBrokerForex(); loadCrypto(); loadIndices(); }, 60000);
 </script>
   <script src="scripts/xauusd-price-widget.js?v=202610192017"></script>
 </body>

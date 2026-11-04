@@ -320,7 +320,8 @@ assert.ok(forexBoardStart > -1, 'forex board section missing');
 assert.ok(forexBoardStart < calendarStart, 'forex board must render before the calendar');
 
 const forexBoardFn = extractFunction('forexBoardHtml');
-const forexBoardHtml = new Function(`const esc = s => String(s ?? '');\n${forexBoardFn}\nreturn forexBoardHtml;`)();
+const brokerLineFn = extractFunction('brokerLineHtml');
+const forexBoardHtml = new Function(`const esc = s => String(s ?? '');\n${brokerLineFn}\n${forexBoardFn}\nreturn forexBoardHtml;`)();
 
 const fxBoard = forexBoardHtml({ items: [
   { pair: 'EUR/USD', rate: 1.08696, dir: 'long', eventLabel: 'CPI · Kam 05 Nov 12:00 WITA', note: 'Forecast 4 vs Previous 3.8' },
@@ -349,6 +350,57 @@ const fxBoardSourced = forexBoardHtml({
 assert.match(fxBoardSourced, /Harga acuan OANDA/);
 assert.match(fxBoardSourced, /GO Markets, FBS & CMC Markets/);
 assert.doesNotMatch(fxBoardSourced, /NaN|undefined/);
+
+// Exact MT5 broker bid/ask: fresh quotes drive the entry side, stale ones only display.
+const brokerQuote = { bid: 1.20010, ask: 1.20030, spreadPips: 2.0, stale: false, ageMin: 2, brokerName: 'FBS Markets Inc.', accountType: 'demo' };
+const fxBuyBroker = forexBoardHtml({ items: [{ pair: 'EUR/USD', rate: 1.2, dir: 'long', broker: brokerQuote }] });
+assert.match(fxBuyBroker, /Entry 1\.20030/, 'BUY must use the broker ask');
+assert.match(fxBuyBroker, /SL 1\.19730/);
+assert.match(fxBuyBroker, /TP 1\.20630/);
+assert.match(fxBuyBroker, /bid 1\.20010 \/ ask 1\.20030/);
+assert.match(fxBuyBroker, /spread 2\.0 pip/);
+assert.match(fxBuyBroker, /FBS Markets Inc\. · demo/);
+assert.doesNotMatch(fxBuyBroker, /STALE/);
+
+const fxSellBroker = forexBoardHtml({ items: [{ pair: 'EUR/USD', rate: 1.2, dir: 'short', broker: brokerQuote }] });
+assert.match(fxSellBroker, /Entry 1\.20010/, 'SELL must use the broker bid');
+assert.match(fxSellBroker, /SL 1\.20310/);
+assert.match(fxSellBroker, /TP 1\.19410/);
+
+const fxWaitBroker = forexBoardHtml({ items: [{ pair: 'EUR/USD', rate: 1.2, dir: null, broker: brokerQuote }] });
+assert.match(fxWaitBroker, /BUY 1\.20030/);
+assert.match(fxWaitBroker, /SELL 1\.20010/);
+
+const fxStaleBroker = forexBoardHtml({ items: [{ pair: 'EUR/USD', rate: 1.12345, dir: 'long', broker: { ...brokerQuote, stale: true, ageMin: 47 } }] });
+assert.match(fxStaleBroker, /STALE 47 mnt/);
+assert.match(fxStaleBroker, /Entry 1\.12345/, 'stale broker quote must not set the entry');
+assert.match(fxStaleBroker, /bid 1\.20010 \/ ask 1\.20030/, 'stale quote is still displayed');
+assert.doesNotMatch(fxStaleBroker, /NaN|undefined/);
+
+// Broker payload parsing and freshness gate.
+const brokerQuoteForFn = extractFunction('brokerQuoteFor');
+const brokerQuoteFor = new Function('FOREX_BROKER', 'BROKER_QUOTE_MAX_AGE_MS', `${brokerQuoteForFn}\nreturn brokerQuoteFor;`);
+const brokerPayload = {
+  generatedAt: '2026-11-04T00:40:00Z',
+  broker: { id: 'FBS', name: 'FBS Markets Inc.', server: 'FBS-Demo', accountType: 'demo' },
+  quotes: { 'EUR/USD': { bid: 1.2001, ask: 1.2003, spreadPips: 2 } }
+};
+const freshBroker = brokerQuoteFor(brokerPayload, 30 * 60 * 1000)('EUR/USD', Date.parse('2026-11-04T00:55:00Z'));
+assert.equal(freshBroker.ask, 1.2003);
+assert.equal(freshBroker.stale, false);
+assert.equal(freshBroker.accountType, 'demo');
+assert.equal(freshBroker.brokerName, 'FBS Markets Inc.');
+assert.ok(Math.abs(freshBroker.ageMin - 15) < 1e-9);
+const staleBroker = brokerQuoteFor(brokerPayload, 30 * 60 * 1000)('EUR/USD', Date.parse('2026-11-04T01:20:00Z'));
+assert.equal(staleBroker.stale, true);
+assert.equal(brokerQuoteFor({ quotes: { 'EUR/USD': { bid: 0, ask: 1.2 } } }, 30 * 60 * 1000)('EUR/USD', Date.now()), null);
+assert.equal(brokerQuoteFor({ quotes: { 'EUR/USD': { bid: 1.2, ask: 1.1 } } }, 30 * 60 * 1000)('EUR/USD', Date.now()), null);
+assert.equal(brokerQuoteFor({}, 30 * 60 * 1000)('EUR/USD', Date.now()), null);
+
+const brokerSourceTextFn = extractFunction('brokerSourceText');
+const brokerSourceText = new Function('FOREX_BROKER', 'BROKER_QUOTE_MAX_AGE_MS', `${brokerSourceTextFn}\nreturn brokerSourceText;`)(brokerPayload, 30 * 60 * 1000);
+assert.match(brokerSourceText(Date.parse('2026-11-04T00:55:00Z')), /Quote broker FBS Markets Inc\. FBS-Demo \(demo\) fresh 15 mnt/);
+assert.match(brokerSourceText(Date.parse('2026-11-04T01:20:00Z')), /stale 40 mnt/);
 
 console.log('Passed global forex board tests');
 

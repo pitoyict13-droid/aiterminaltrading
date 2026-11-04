@@ -31,10 +31,22 @@ The **Nasdaq 100 & S&P 500** board (`NAS100`, `US500`) follows the same USD cata
 
 - **Anchor:** `OANDA` live quotes for all eight pairs (not the old daily `open.er-api.com` rate). The board reads the direct pair price, so GBP/JPY and EUR/JPY no longer need to be reconstructed from two daily USD rates.
 - **Cross-check:** Saxo, FOREX.com, Capital.com, Pepperstone, Vantage, FP Markets, Eightcap, BlackBull Markets, ThinkMarkets and Skilling. `crossCheckPct` is the maximum deviation from the OANDA anchor; it is normally below 0.05%.
-- **GO Markets, FBS, CMC Markets:** their public websites do not expose a CORS-free quote endpoint, and their TradingView feeds are not available to anonymous scanners. The workflow still probes `GOMARKETS`, `CMCMARKETS` and `FBS`, records `ok`/`unavailable` in `providers`, and the UI tells you to confirm the executable bid/ask in those broker terminals. Do not treat the OANDA mid as a broker fill price.
+- **GO Markets, FBS, CMC Markets:** their public websites do not expose a CORS-free quote endpoint, and their TradingView feeds are not available to anonymous scanners. The workflow still probes `GOMARKETS`, `CMCMARKETS` and `FBS`, records `ok`/`unavailable` in `providers`, and the UI labels the OANDA mid as a reference price, not a broker fill. Exact broker bid/ask comes from the local MT5 bridge below when that broker terminal is logged in.
 - **Fallback:** if every live feed fails, the fetcher writes the daily er-api rate and labels it `er-api (daily fallback)` in the UI. This fallback is deliberately visible, not silent.
 
 `data/forex.json` shape: `{ generatedAt, source, anchor, quotes: { "EUR/USD": { price, consensus, source, changePct, crossCheckPct, providers } }, rates, providers }`. `rates` is USD-base and kept for the pre-news snapshot store; `quotes` is the direct pair price used by the board.
+
+### Local MT5 broker bid/ask
+
+GitHub Actions cannot reach your PC, so the exact broker quote is exported by `scripts/mt5_quotes.py` on the Windows machine where MT5 is open and logged in. It reads `symbol_info_tick()` for the eight pairs and writes `data/forex-broker.json`; it never writes login numbers, balance, equity or credentials.
+
+    python scripts\mt5_quotes.py       :: export only
+    publish-broker-quotes.bat          :: export + commit + push
+    install-broker-quotes-task.bat     :: schedule the publisher every 15 minutes
+
+The scheduled task is `aiterminaltrading-broker-quotes`; it runs only while the user is logged on and MT5 is open. Log: `bridge\broker-quotes.log`.
+
+`data/forex-broker.json` shape: `{ generatedAt, source, broker: { id, name, server, accountType, terminal }, quotes: { "EUR/USD": { bid, ask, mid, spread, spreadPips, digits, symbol, brokerTime } }, providers }`. `brokerTime` is the broker server clock; UI freshness uses `generatedAt`. When the file is at most 30 minutes old, the board shows the broker bid/ask and uses **ask for BUY** / **bid for SELL**. Older quotes are shown as STALE and the OANDA mid is used instead.
 
 
 Event cards also show the pre-news market bias for affected forex majors, crosses and indices, and the card's signal badge changes from WAIT to BUY/SELL. This is an execution scenario, not a guarantee: wait for the release if the forecast edge is flat.

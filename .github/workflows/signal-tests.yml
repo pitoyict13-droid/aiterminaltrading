@@ -22,3 +22,5 @@ jobs:
         run: node tests/prenews.test.mjs
       - name: Run forex live-source tests
         run: node tests/forex-source.test.mjs
+      - name: Run MT5 quote exporter tests
+        run: python tests/mt5_quotes_test.py
