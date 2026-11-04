@@ -82,7 +82,22 @@
     .fx-levels span { background: rgba(4,14,21,.42); padding: 3px 7px; border-radius: 7px; }
     .fx-event { margin-top: 7px; color: #cfe9ef; font-size: 10.5px; font-weight: 600; }
     .fx-note { margin-top: 3px; color: var(--muted); font-size: 9.5px; }
-    @media(max-width:760px){ .crypto-board,.market-board,.forex-board { grid-template-columns: 1fr; } .crypto-grid,.mb-levels,.fx-grid { grid-template-columns: 1fr; } }
+    .indices-board { margin-top: 18px; border-radius: 26px; padding: 18px 22px; display: grid; grid-template-columns: minmax(210px, .85fr) 2fr; gap: 18px; align-items: center; }
+    .indices-board h3 { font: 800 19px Manrope; margin: 4px 0 3px; letter-spacing: -.4px; }
+    .indices-board p { margin: 0; color: var(--muted); font-size: 12px; max-width: 340px; }
+    .idx-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .idx-card { background: rgba(4,15,23,.42); border: 1px solid var(--line); border-left: 3px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+    .idx-card.buy { border-left-color: var(--green); }
+    .idx-card.sell { border-left-color: var(--red); }
+    .idx-card.wait { border-left-color: var(--amber); }
+    .idx-card .pair { display: flex; justify-content: space-between; align-items: center; gap: 8px; font: 800 14px Manrope; }
+    .idx-card .pair small { color: var(--muted); font: 500 11px "DM Sans",sans-serif; }
+    .idx-price { font: 800 22px Manrope; letter-spacing: -.5px; margin: 4px 0 6px; }
+    .idx-levels { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 11px; color: #dff5fb; }
+    .idx-levels span { background: rgba(4,14,21,.42); padding: 3px 7px; border-radius: 7px; }
+    .idx-event { margin-top: 7px; color: #cfe9ef; font-size: 10.5px; font-weight: 600; }
+    .idx-note { margin-top: 3px; color: var(--muted); font-size: 9.5px; }
+    @media(max-width:760px){ .crypto-board,.market-board,.forex-board,.indices-board { grid-template-columns: 1fr; } .crypto-grid,.mb-levels,.fx-grid,.idx-grid { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body><main class="shell">
@@ -121,10 +136,18 @@
   <section class="forex-board glass" id="forexBoard">
     <div>
       <div class="eyebrow">Forex watch</div>
-      <h3>Forex Majors</h3>
-      <p>Pre-news market entry bias for EUR/USD, GBP/USD, USD/JPY, USD/CHF, AUD/USD and USD/CAD. BUY/SELL comes from Forecast vs Previous on the next medium/high-impact event; it is a scenario, not a prediction.</p>
+      <h3>Forex Majors &amp; JPY Crosses</h3>
+      <p>Pre-news market entry bias for EUR/USD, GBP/USD, USD/JPY, USD/CHF, AUD/USD, USD/CAD, GBP/JPY and EUR/JPY. BUY/SELL comes from Forecast vs Previous on the next medium/high-impact event; it is a scenario, not a prediction.</p>
     </div>
     <div class="fx-grid" id="fxGrid"></div>
+  </section>
+  <section class="indices-board glass" id="indicesBoard">
+    <div>
+      <div class="eyebrow">Index watch</div>
+      <h3>Nasdaq 100 &amp; S&amp;P 500</h3>
+      <p>NAS100 and US500 react to the same USD catalyst. BUY means risk-on/stronger index, SELL means risk-off/weaker index. Risk template NAS100 1%/2%, US500 0.75%/1.5%.</p>
+    </div>
+    <div class="idx-grid" id="idxGrid"></div>
   </section>
   <nav class="toolbar glass"><div class="filters"><button class="chip active" data-filter="all">Full month</button><button class="chip" data-filter="upcoming">Upcoming</button><button class="chip" data-filter="high">High impact</button></div><span class="status" id="status">Loading calendar…</span><button class="refresh" id="refresh">↻ Refresh</button></nav>
   <div class="section-head"><div><h3 id="monthTitle">Economic calendar</h3><p>Oldest to newest • times shown in WITA</p></div></div>
@@ -152,13 +175,21 @@ function countryCode(c) {
     return ({ 'UNITED STATES': 'USD', US: 'USD', USA: 'USD', CANADA: 'CAD', CA: 'CAD', EUROZONE: 'EUR', 'EURO AREA': 'EUR', UK: 'GBP', 'UNITED KINGDOM': 'GBP', JAPAN: 'JPY', AUSTRALIA: 'AUD', 'NEW ZEALAND': 'NZD' }[u] || u);
 }
 const WITA = 'Asia/Makassar';
-const FOREX_PAIRS = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CHF', 'AUD/USD', 'USD/CAD'];
+const FOREX_MAJORS = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CHF', 'AUD/USD', 'USD/CAD'];
+const FOREX_CROSSES = ['GBP/JPY', 'EUR/JPY'];
+const FOREX_PAIRS = [...FOREX_MAJORS, ...FOREX_CROSSES];
+const INDICES = [
+    { symbol: 'NAS100', name: 'Nasdaq 100', yahoo: '^NDX', slPct: 1.0, tpPct: 2.0 },
+    { symbol: 'US500', name: 'S&P 500', yahoo: '^GSPC', slPct: 0.75, tpPct: 1.5 }
+];
 
 let events = [], filter = 'all', timer;
 let LIVE_PRICE = null;
 let FOREX_RATES = {};
 let CRYPTO_RATES = {};
 let CRYPTO_CHANGE = {};
+let INDEX_RATES = {};
+let INDEX_CHANGE = {};
 let PRE_NEWS = {};
 window.applyLiveXauPrice = function (price) {
     const p = Number(price);
@@ -206,7 +237,8 @@ function preNewsSnapshot(e) {
         ...repo,
         ...local,
         forex: { ...(repo.forex || {}), ...(local.forex || {}) },
-        crypto: { ...(repo.crypto || {}), ...(local.crypto || {}) }
+        crypto: { ...(repo.crypto || {}), ...(local.crypto || {}) },
+        indices: { ...(repo.indices || {}), ...(local.indices || {}) }
     };
 }
 
@@ -226,7 +258,13 @@ function rememberPreNewsPrice(e) {
     });
     if (Object.keys(fx).length) snap.forex = fx;
     if (Object.keys(CRYPTO_RATES).length) snap.crypto = { ...CRYPTO_RATES };
-    if (snap.gold == null && !snap.forex && !snap.crypto) return;
+    const idx = {};
+    Object.keys(INDEX_RATES).forEach(symbol => {
+        const v = Number(INDEX_RATES[symbol] && INDEX_RATES[symbol].price);
+        if (Number.isFinite(v) && v > 0) idx[symbol] = v;
+    });
+    if (Object.keys(idx).length) snap.indices = { ...(snap.indices || {}), ...idx };
+    if (snap.gold == null && !snap.forex && !snap.crypto && !snap.indices) return;
     snap.capturedAt = new Date(now).toISOString();
     try { localStorage.setItem(eventKey(e), JSON.stringify(snap)); } catch {}
 }
@@ -259,6 +297,9 @@ function momentumFor(e, kind, pair) {
     } else if (kind === 'crypto') {
         base = Number(snap.crypto && snap.crypto[pair]);
         cur = Number(CRYPTO_RATES[pair]);
+    } else if (kind === 'index') {
+        base = Number(snap.indices && snap.indices[pair]);
+        cur = Number(INDEX_RATES[pair] && INDEX_RATES[pair].price);
     }
     if (!Number.isFinite(base) || base <= 0 || !Number.isFinite(cur) || cur <= 0) return null;
     const changePct = (cur - base) / base * 100;
@@ -269,12 +310,23 @@ function postNewsMomentum(e) {
     return momentumFor(e, 'gold');
 }
 
-// Pair yang relevan dengan negara news: AUD hanya AUD/USD, USD memengaruhi semua pair USD.
+// Pair yang relevan dengan negara news. USD adalah driver global, jadi cross non-USD
+// juga ikut bereaksi terhadap event USD.
+function pairCurrencies(pair) {
+    const [base, quote] = String(pair).toUpperCase().split('/');
+    const list = [base, quote].filter(Boolean);
+    if (base && quote && base !== 'USD' && quote !== 'USD' && !list.includes('USD')) list.push('USD');
+    return list;
+}
+
 function eventAssets(e) {
     const c = countryCode(e.Country);
-    if (c === 'USD') return { gold: true, forex: ['EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CHF', 'AUD/USD', 'USD/CAD'], crypto: true };
-    const pair = ({ AUD: 'AUD/USD', EUR: 'EUR/USD', GBP: 'GBP/USD', JPY: 'USD/JPY', CHF: 'USD/CHF', CAD: 'USD/CAD' })[c];
-    return { gold: false, forex: pair ? [pair] : [], crypto: false };
+    return {
+        gold: c === 'USD',
+        forex: FOREX_PAIRS.filter(pair => pairCurrencies(pair).includes(c)),
+        crypto: c === 'USD',
+        indices: c === 'USD'
+    };
 }
 
 function focusPair(e) {
@@ -414,7 +466,7 @@ function renderCryptoBoard() {
 }
 
 function nextPairEvent(pair, now = Date.now()) {
-    const currencies = String(pair).split('/');
+    const currencies = pairCurrencies(pair);
     return events
         .filter(e => (+e.Importance || 1) >= 2 && currencies.includes(countryCode(e.Country)))
         .map(e => ({ e, t: new Date(e.Date).getTime() }))
@@ -429,7 +481,7 @@ function forexBoardState(now = Date.now()) {
         let dir = null, note = '', eventLabel = '';
         if (next) {
             const bias = preNewsBias(next.e);
-            if (bias) dir = mapPairBias(pair, bias.dir);
+            if (bias) dir = mapPairBias(pair, bias.dir, next.e.Country);
             eventLabel = `${next.e.Event} · ${fmtDate(new Date(next.e.Date))} ${fmtTime(new Date(next.e.Date))}`;
             note = bias
                 ? `Forecast ${bias.forecast} vs Previous ${bias.previous}${bias.source ? ' • ' + bias.source : ''}`
@@ -478,6 +530,192 @@ function forexBoardHtml(state) {
 function renderForexBoard() {
     const grid = $('#fxGrid');
     if (grid) grid.innerHTML = forexBoardHtml(forexBoardState());
+}
+
+function indexRate(symbol) {
+    const v = Number(INDEX_RATES[symbol] && INDEX_RATES[symbol].price);
+    return Number.isFinite(v) && v > 0 ? v : null;
+}
+
+function nextUsdCatalyst(now = Date.now()) {
+    const usd = events
+        .filter(e => countryCode(e.Country) === 'USD' && (+e.Importance || 1) >= 2)
+        .map(e => ({ e, t: new Date(e.Date).getTime() }))
+        .filter(x => Number.isFinite(x.t))
+        .sort((a, b) => a.t - b.t);
+    const upcoming = usd.find(x => x.t > now);
+    const released = usd.filter(x => x.t <= now && now <= postNewsExpiry(x.e).getTime());
+    const pick = released.length ? released[released.length - 1] : upcoming;
+    const label = pick ? `${pick.e.Event} · ${fmtDate(new Date(pick.e.Date))} ${fmtTime(new Date(pick.e.Date))}` : '';
+    return { pick, upcoming, label };
+}
+
+function indicesBoardState(now = Date.now()) {
+    const items = INDICES.map(cfg => {
+        const rate = INDEX_RATES[cfg.symbol] || {};
+        return {
+            symbol: cfg.symbol,
+            name: cfg.name,
+            slPct: cfg.slPct,
+            tpPct: cfg.tpPct,
+            price: Number(rate.price),
+            changePct: Number(rate.changePct),
+            dir: null,
+            momPct: null
+        };
+    });
+    const { pick, upcoming, label } = nextUsdCatalyst(now);
+    if (!pick) return { status: 'idle', items, event: '', next: upcoming ? label : '', note: '' };
+
+    const phase = newsPhase(pick.e);
+    if (phase === 'live') return { status: 'live', items, event: label, next: '', note: '' };
+
+    const a = analyze(pick.e);
+    let dir = (a.dir === 'long' || a.dir === 'short') ? a.dir : null;
+    let note = dir ? `Actual ${pick.e.Actual} vs Forecast ${pick.e.Forecast}` : '';
+    if (!dir) {
+        const bias = preNewsBias(pick.e);
+        if (bias) {
+            dir = bias.dir;
+            note = `Forecast ${bias.forecast} vs Previous ${bias.previous}${bias.source ? ' • ' + bias.source : ''}`;
+        }
+    }
+
+    items.forEach(it => {
+        it.dir = dir;
+        if (phase === 'post') {
+            const mom = momentumFor(pick.e, 'index', it.symbol);
+            if (mom && mom.dir) {
+                it.dir = mom.dir;
+                it.momPct = mom.changePct;
+            }
+        }
+    });
+
+    return {
+        status: 'active',
+        phase,
+        items,
+        event: label,
+        note,
+        next: upcoming ? label : '',
+        validUntil: phase === 'post' ? fmtDate(postNewsExpiry(pick.e)) + ' ' + fmtTime(postNewsExpiry(pick.e)) : label
+    };
+}
+
+function indicesBoardHtml(state) {
+    const st = state || {};
+    const items = Array.isArray(st.items) ? st.items : [];
+    const fmt = n => Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const cards = items.map(it => {
+        const price = Number(it.price);
+        if (!Number.isFinite(price) || price <= 0) {
+            return `<div class="idx-card wait"><div class="pair"><span>${esc(it.symbol)}</span><small>${esc(it.name)}</small><span class="fx-badge wait">WAIT</span></div><div class="idx-price">—</div><div class="idx-note">Menunggu harga index…</div></div>`;
+        }
+        const dir = it.dir === 'long' ? 'buy' : it.dir === 'short' ? 'sell' : 'wait';
+        const label = dir === 'buy' ? 'BUY' : dir === 'sell' ? 'SELL' : 'WAIT';
+        let levels;
+        if (dir === 'buy' || dir === 'sell') {
+            const isLong = dir === 'buy';
+            const sl = isLong ? price * (1 - it.slPct / 100) : price * (1 + it.slPct / 100);
+            const tp = isLong ? price * (1 + it.tpPct / 100) : price * (1 - it.tpPct / 100);
+            levels = `<div class="idx-levels"><span>Entry ${fmt(price)}</span><span>SL ${fmt(sl)}</span><span>TP ${fmt(tp)}</span><span>R:R 1:2</span></div>`;
+        } else {
+            const buffer = it.slPct / 2;
+            levels = `<div class="idx-levels"><span>BUY &gt; ${fmt(price * (1 + buffer / 100))}</span><span>SELL &lt; ${fmt(price * (1 - buffer / 100))}</span></div>`;
+        }
+        const chg = Number(it.changePct);
+        const mom = Number(it.momPct);
+        const changeHtml = Number.isFinite(chg)
+            ? `<span style="color:${chg >= 0 ? 'var(--green)' : 'var(--red)'}">${chg >= 0 ? '▲ +' : '▼ '}${chg.toFixed(2)}%</span>`
+            : '';
+        const momHtml = Number.isFinite(mom) ? ` <small style="color:var(--muted);">${mom >= 0 ? '+' : ''}${mom.toFixed(2)}%</small>` : '';
+        const eventLine = st.event ? `<div class="idx-event">${esc(st.event)}</div>` : '<div class="idx-event">Tidak ada katalis USD aktif</div>';
+        const noteLine = st.note ? `<div class="idx-note">${esc(st.note)}</div>` : '';
+        const liveLine = st.status === 'live' ? '<div class="idx-note">⏳ Rilis berlangsung — tunggu impact terkonfirmasi.</div>' : '';
+        const postLine = st.phase === 'post' && st.validUntil ? `<div class="idx-note">Post-news • valid s/d ${esc(st.validUntil)}</div>` : '';
+        return `<div class="idx-card ${dir}">
+            <div class="pair"><span>${esc(it.symbol)}</span><small>${esc(it.name)}</small><span class="fx-badge ${dir}">${label}${dir !== 'wait' ? ' · MARKET' : ''}${momHtml}</span></div>
+            <div class="idx-price">${fmt(price)}</div>
+            <div class="idx-levels">${changeHtml ? `<span>${changeHtml}</span>` : ''}<span>SL/TP ${it.slPct}% / ${it.tpPct}%</span></div>
+            ${levels}
+            ${eventLine}
+            ${noteLine}
+            ${liveLine}
+            ${postLine}
+        </div>`;
+    }).join('');
+    return cards || '<div class="idx-card wait"><div class="pair"><span>NAS100 · US500</span></div><div class="idx-note">Menunggu data index…</div></div>';
+}
+
+function renderIndicesBoard() {
+    const grid = $('#idxGrid');
+    if (grid) grid.innerHTML = indicesBoardHtml(indicesBoardState());
+}
+
+function applyIndexItems(items) {
+    if (!Array.isArray(items)) return 0;
+    const nextRates = {}, nextChange = {};
+    items.forEach(it => {
+        const symbol = String((it && it.symbol) || '').toUpperCase();
+        if (!INDICES.some(cfg => cfg.symbol === symbol)) return;
+        const price = Number(it && it.price);
+        if (!Number.isFinite(price) || price <= 0) return;
+        const previousClose = Number(it.previousClose);
+        const rawChange = it && it.changePct;
+        const changePct = (rawChange === null || rawChange === undefined || String(rawChange).trim() === '') ? NaN : Number(rawChange);
+        nextRates[symbol] = {
+            price,
+            previousClose: Number.isFinite(previousClose) && previousClose > 0 ? previousClose : null,
+            changePct: Number.isFinite(changePct) ? changePct : null
+        };
+        if (Number.isFinite(changePct)) nextChange[symbol] = changePct;
+    });
+    const count = Object.keys(nextRates).length;
+    if (!count) return 0;
+    INDEX_RATES = { ...INDEX_RATES, ...nextRates };
+    INDEX_CHANGE = { ...INDEX_CHANGE, ...nextChange };
+    return count;
+}
+
+async function fetchIndexLive(cfg) {
+    const target = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(cfg.yahoo)}?interval=1m&range=1d`;
+    const url = `https://api.allorigins.win/raw?url=${encodeURIComponent(target)}`;
+    const r = await fetch(url, { cache: 'no-store' });
+    if (!r.ok) return null;
+    const j = await r.json();
+    const meta = j && j.chart && j.chart.result && j.chart.result[0] && j.chart.result[0].meta;
+    if (!meta) return null;
+    const price = Number(meta.regularMarketPrice);
+    const previousClose = Number(meta.chartPreviousClose ?? meta.previousClose);
+    if (!Number.isFinite(price) || price <= 0) return null;
+    return {
+        symbol: cfg.symbol,
+        name: cfg.name,
+        yahoo: cfg.yahoo,
+        price,
+        previousClose: Number.isFinite(previousClose) && previousClose > 0 ? previousClose : null,
+        changePct: Number.isFinite(previousClose) && previousClose > 0 ? ((price - previousClose) / previousClose) * 100 : null
+    };
+}
+
+async function loadIndices() {
+    let count = 0;
+    try {
+        const r = await fetch(`data/indices.json?v=${Date.now()}`, { cache: 'no-store' });
+        if (r.ok) {
+            const j = await r.json();
+            count = applyIndexItems(j && j.items);
+        }
+    } catch (e) { console.log('Index snapshot unavailable', e); }
+    if (count < INDICES.length) {
+        try {
+            const live = await Promise.all(INDICES.map(cfg => fetchIndexLive(cfg).catch(() => null)));
+            applyIndexItems(live.filter(Boolean));
+        } catch (e) { console.log('Live index API failed', e); }
+    }
+    renderIndicesBoard();
+    render();
 }
 
 async function loadCrypto() {
@@ -570,10 +808,23 @@ function preNewsBias(e) {
     return { ...near[0].b, source: near[0].o.Event };
 }
 
-// Map the event bias to a pair: "long" means buy XXX/USD, but sell USD/XXX.
-function mapPairBias(pair, dir) {
+// Map the event bias to a pair. "long" means USD weaker / non-USD currency stronger.
+// For a cross (e.g. GBP/JPY) the event currency decides the leg: base strengthens = BUY,
+// quote strengthens = SELL. A USD event is treated as a risk-on/off driver.
+function invertDir(dir) {
+    return dir === 'long' ? 'short' : dir === 'short' ? 'long' : null;
+}
+
+function mapPairBias(pair, dir, country) {
     if (dir !== 'long' && dir !== 'short') return null;
-    return String(pair).startsWith('USD/') ? (dir === 'short' ? 'long' : 'short') : dir;
+    const [base, quote] = String(pair).toUpperCase().split('/');
+    if (!base || !quote) return null;
+    const c = country ? countryCode(country) : '';
+    // USD event: "long" already means USD weaker, not USD stronger.
+    if (!c || c === 'USD') return base === 'USD' ? invertDir(dir) : dir;
+    if (c === base) return dir;
+    if (c === quote) return invertDir(dir);
+    return base === 'USD' ? invertDir(dir) : dir;
 }
 
 function analyze(e) {
@@ -609,13 +860,12 @@ function normalize(e) {
 
 function pairRateFrom(rates, pair) {
     if (!rates) return null;
-    if (pair === 'EUR/USD') return rates.EUR ? 1 / rates.EUR : null;
-    if (pair === 'GBP/USD') return rates.GBP ? 1 / rates.GBP : null;
-    if (pair === 'AUD/USD') return rates.AUD ? 1 / rates.AUD : null;
-    if (pair === 'USD/JPY') return rates.JPY || null;
-    if (pair === 'USD/CHF') return rates.CHF || null;
-    if (pair === 'USD/CAD') return rates.CAD || null;
-    return null;
+    const [base, quote] = String(pair).toUpperCase().split('/');
+    if (!base || !quote) return null;
+    const per = c => c === 'USD' ? 1 : Number(rates[c]);
+    const b = per(base), q = per(quote);
+    if (!Number.isFinite(b) || b <= 0 || !Number.isFinite(q) || q <= 0) return null;
+    return q / b;
 }
 
 function pairRate(pair) {
@@ -764,9 +1014,9 @@ function tpSl(a, e) {
             const pipMultiplier = isJpyStyle ? 100 : 10000;
 
             const pairMom = isPost && !directed && assets.forex.includes(pair) ? momentumFor(e, 'forex', pair) : null;
-            const pairPreBias = isPre && !directed && assets.forex.includes(pair) && preFxBias ? mapPairBias(pair, preFxBias.dir) : null;
+            const pairPreBias = isPre && !directed && assets.forex.includes(pair) && preFxBias ? mapPairBias(pair, preFxBias.dir, e.Country) : null;
             const pairBias = directed
-                ? (assets.forex.includes(pair) ? mapPairBias(pair, a.dir) : null)
+                ? (assets.forex.includes(pair) ? mapPairBias(pair, a.dir, e.Country) : null)
                 : (pairMom && pairMom.dir ? pairMom.dir : pairPreBias);
 
             if (pairBias) {
@@ -835,6 +1085,48 @@ function tpSl(a, e) {
                 <div class="val" style="color:var(--green); font-size:11px;">BUY: $${fmt(buyEntry)} → TP $${fmt(buyEntry * (1 + tpPct / 100))}</div>
                 <div class="val" style="color:var(--red); font-size:11px;">SELL: $${fmt(sellEntry)} → TP $${fmt(sellEntry * (1 - tpPct / 100))}</div>
                 <div class="val" style="color:var(--muted); font-size:9px;">SL/TP: ${slPct}% / ${tpPct}%</div>
+            </div>`;
+        });
+        html += `</div>`;
+    }
+
+    if (assets.indices && Object.keys(INDEX_RATES).length > 0) {
+        const indexBias = directed ? a.dir : (preFxBias ? preFxBias.dir : null);
+        const idxStatus = directed
+            ? `(${actionOf(a.dir)} • USD ${a.dir === 'long' ? 'Melemah' : 'Menguat'})`
+            : isPost ? '(Momentum per index)'
+            : preFxBias ? `(PRE-NEWS ${actionOf(preFxBias.dir)} bias)`
+            : '(Breakout Level)';
+        const fmtIdx = n => Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        html += `<div class="forex-container" style="border-top: 1px dashed rgba(255,255,255,.1); margin-top: 10px; padding-top: 10px;"><span style="color:#8bd4ff; font-weight:bold; width:100%;">Indices (Nasdaq 100 &amp; S&amp;P 500) ${idxStatus}</span>`;
+        INDICES.forEach(cfg => {
+            const rate = indexRate(cfg.symbol);
+            if (!rate) return;
+            let idxDir = indexBias;
+            let mom = null;
+            if (isPost && !directed) {
+                mom = momentumFor(e, 'index', cfg.symbol);
+                if (mom && mom.dir) idxDir = mom.dir;
+            }
+            if (idxDir) {
+                const isLong = idxDir === 'long';
+                const sl = isLong ? rate * (1 - cfg.slPct / 100) : rate * (1 + cfg.slPct / 100);
+                const tp = isLong ? rate * (1 + cfg.tpPct / 100) : rate * (1 - cfg.tpPct / 100);
+                const cls = isLong ? 'long' : 'short';
+                const momNote = mom ? ` <small style="color:var(--muted);">${mom.changePct >= 0 ? '+' : ''}${mom.changePct.toFixed(2)}%</small>` : '';
+                const preNote = preFxBias && !mom ? ' <small style="color:var(--amber);">pre-news market</small>' : '';
+                html += `<div class="forex-card ${cls}" style="border-left-color:${isLong ? 'var(--green)' : 'var(--red)'};"><div>${esc(cfg.symbol)} <b>${isLong ? 'BUY' : 'SELL'}</b>${momNote}${preNote}</div><div class="val">Entry: ${fmtIdx(rate)}</div><div class="val" style="color:var(--red)">SL: ${fmtIdx(sl)}</div><div class="val" style="color:var(--green)">TP: ${fmtIdx(tp)}</div><div class="val" style="color:var(--muted); font-size:9px;">SL/TP ${cfg.slPct}% / ${cfg.tpPct}%</div></div>`;
+                return;
+            }
+            const buffer = cfg.slPct / 2;
+            const buyEntry = rate * (1 + buffer / 100);
+            const sellEntry = rate * (1 - buffer / 100);
+            const label = isPre ? 'STRADDLE' : 'BREAKOUT';
+            html += `<div class="forex-card" style="border-left-color: var(--amber);">
+                <div>${esc(cfg.symbol)} <b style="color:var(--amber)">${label}</b></div>
+                <div class="val" style="color:var(--green); font-size:11px;">BUY &gt; ${fmtIdx(buyEntry)}</div>
+                <div class="val" style="color:var(--red); font-size:11px;">SELL &lt; ${fmtIdx(sellEntry)}</div>
+                <div class="val" style="color:var(--muted); font-size:9px;">SL/TP ${cfg.slPct}% / ${cfg.tpPct}%</div>
             </div>`;
         });
         html += `</div>`;
@@ -958,6 +1250,7 @@ function render() {
     updateCountdown(next);
     renderGoldBoard();
     renderForexBoard();
+    renderIndicesBoard();
 }
 
 function updateCountdown(next) {
@@ -982,12 +1275,13 @@ document.querySelector('.filters').addEventListener('click', ev => {
     render();
 });
 
-$('#refresh').onclick = () => { load(); loadForex(); loadCrypto(); loadPreNews(); };
+$('#refresh').onclick = () => { load(); loadForex(); loadCrypto(); loadIndices(); loadPreNews(); };
 renderGoldBoard();
 renderCryptoBoard();
 renderForexBoard();
-load(); loadForex(); loadCrypto(); loadPreNews();
-setInterval(() => { loadForex(); loadCrypto(); }, 60000);
+renderIndicesBoard();
+load(); loadForex(); loadCrypto(); loadIndices(); loadPreNews();
+setInterval(() => { loadForex(); loadCrypto(); loadIndices(); }, 60000);
 </script>
   <script src="scripts/xauusd-price-widget.js?v=202610192017"></script>
 </body>

@@ -5,6 +5,10 @@ const PRE_NEWS_FILE = 'data/prenews.json';
 const PRE_NEWS_HOLD_MS = 7 * 24 * 60 * 60 * 1000;
 const PRE_NEWS_WINDOW_MS = 2 * 60 * 60 * 1000;
 const FOREX_SYMBOLS = ['EUR', 'GBP', 'JPY', 'CHF', 'AUD', 'CAD'];
+const INDICES = [
+  { symbol: 'NAS100', name: 'Nasdaq 100', yahoo: '^NDX' },
+  { symbol: 'US500', name: 'S&P 500', yahoo: '^GSPC' }
+];
 
 function normalizeMarket(market) {
   if (market && typeof market === 'object') {
@@ -12,11 +16,12 @@ function normalizeMarket(market) {
     return {
       gold: Number.isFinite(gold) && gold > 0 ? gold : null,
       forex: market.forex && typeof market.forex === 'object' ? market.forex : null,
-      crypto: market.crypto && typeof market.crypto === 'object' ? market.crypto : null
+      crypto: market.crypto && typeof market.crypto === 'object' ? market.crypto : null,
+      indices: market.indices && typeof market.indices === 'object' ? market.indices : null
     };
   }
   const gold = Number(market);
-  return { gold: Number.isFinite(gold) && gold > 0 ? gold : null, forex: null, crypto: null };
+  return { gold: Number.isFinite(gold) && gold > 0 ? gold : null, forex: null, crypto: null, indices: null };
 }
 
 export function updatePreNewsStore(store, events, market, now = Date.now()) {
@@ -27,8 +32,8 @@ export function updatePreNewsStore(store, events, market, now = Date.now()) {
     if (Number.isFinite(t) && now - t <= PRE_NEWS_HOLD_MS) next[key] = entry;
   }
 
-  const { gold, forex, crypto } = normalizeMarket(market);
-  const hasPrices = gold != null || (forex && Object.keys(forex).length) || (crypto && Object.keys(crypto).length);
+  const { gold, forex, crypto, indices } = normalizeMarket(market);
+  const hasPrices = gold != null || (forex && Object.keys(forex).length) || (crypto && Object.keys(crypto).length) || (indices && Object.keys(indices).length);
   if (!hasPrices) return next;
 
   for (const ev of events || []) {
@@ -44,6 +49,7 @@ export function updatePreNewsStore(store, events, market, now = Date.now()) {
     if (gold != null) snap.gold = gold;
     if (forex) snap.forex = { ...(prev.forex || {}), ...forex };
     if (crypto) snap.crypto = { ...(prev.crypto || {}), ...crypto };
+    if (indices) snap.indices = { ...(prev.indices || {}), ...indices };
     next[key] = snap;
   }
   return next;
@@ -160,10 +166,49 @@ async function fetchCrypto() {
   return null;
 }
 
+async function fetchIndices() {
+  const items = [];
+  for (const cfg of INDICES) {
+    try {
+      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(cfg.yahoo)}?interval=1m&range=1d`;
+      const r = await fetch(url, { headers: { 'user-agent': 'Mozilla/5.0' } });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const j = await r.json();
+      const meta = j && j.chart && j.chart.result && j.chart.result[0] && j.chart.result[0].meta;
+      if (!meta) throw new Error('meta missing');
+      const price = Number(meta.regularMarketPrice);
+      const previousClose = Number(meta.chartPreviousClose ?? meta.previousClose);
+      if (!Number.isFinite(price) || price <= 0) throw new Error('price missing');
+      items.push({
+        symbol: cfg.symbol,
+        name: cfg.name,
+        yahoo: cfg.yahoo,
+        price,
+        previousClose: Number.isFinite(previousClose) && previousClose > 0 ? previousClose : null,
+        changePct: Number.isFinite(previousClose) && previousClose > 0
+          ? Number((((price - previousClose) / previousClose) * 100).toFixed(2))
+          : null
+      });
+    } catch (e) {
+      console.error('Gagal mengambil index', cfg.symbol, e.message || e);
+    }
+  }
+  if (!items.length) return null;
+  await fs.writeFile('data/indices.json', JSON.stringify({
+    generatedAt: new Date().toISOString(),
+    items
+  }, null, 2));
+  console.log('Berhasil menyimpan indices.json:', items.map(x => `${x.symbol}=${x.price}`).join(', '));
+  return items;
+}
+
 export async function main() {
   const events = await fetchCalendar();
-  const [price, forex, crypto] = await Promise.all([fetchMarket(), fetchForex(), fetchCrypto()]);
-  const store = updatePreNewsStore(await readPreNews(), events, { price, forex, crypto });
+  const [price, forex, crypto, indices] = await Promise.all([fetchMarket(), fetchForex(), fetchCrypto(), fetchIndices()]);
+  const indexPrices = indices
+    ? Object.fromEntries(indices.map(x => [x.symbol, x.price]))
+    : null;
+  const store = updatePreNewsStore(await readPreNews(), events, { price, forex, crypto, indices: indexPrices });
   await fs.writeFile(PRE_NEWS_FILE, JSON.stringify(store, null, 2));
   console.log('Snapshot harga pra-news tersimpan:', Object.keys(store).length, 'event.');
 }

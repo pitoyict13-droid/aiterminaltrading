@@ -11,18 +11,21 @@
 3. Run the `Update live economic calendar` workflow once.
 4. Enable GitHub Pages from `main` and `/ (root)`.
 
-The calendar uses Forex Factory's free public weekly export; no calendar key is required. The workflow merges each refresh into the current month and updates Twelve Data XAU/USD price every two hours. All displayed times use India Standard Time (`Asia/Kolkata`). Never put the private API key in public HTML. LONG/SHORT is scenario analysis, not a prediction.
+The calendar uses Forex Factory's free public weekly export; no calendar key is required. The workflow merges each refresh into the current month and updates XAU/USD price every 15 minutes. All displayed times use Waktu Indonesia Tengah (`Asia/Makassar`, UTC+8). Never put the private API key in public HTML. LONG/SHORT is scenario analysis, not a prediction.
 
-## Forex majors pre-news BUY/SELL
+## Forex majors, JPY crosses & indices pre-news BUY/SELL
 
-The terminal now has an always-visible **Forex Majors** board for EUR/USD, GBP/USD, USD/JPY, USD/CHF, AUD/USD and USD/CAD under the gold/crypto boards. Before each medium/high-impact release it shows an explicit **BUY · MARKET** or **SELL · MARKET** entry with Entry/SL/TP (30/60 pips, 1:2 RR). The direction comes from the event's Forecast vs Previous using the same economic mapping as the gold bias:
+The terminal has an always-visible **Forex Majors & JPY Crosses** board for EUR/USD, GBP/USD, USD/JPY, USD/CHF, AUD/USD, USD/CAD, GBP/JPY and EUR/JPY under the gold/crypto boards. Before each medium/high-impact release it shows an explicit **BUY · MARKET** or **SELL · MARKET** entry with Entry/SL/TP (30/60 pips, 1:2 RR). The direction comes from the event's Forecast vs Previous using the same economic mapping as the gold bias:
 
 - Higher US inflation/payrolls → USD stronger → SELL EUR/USD, GBP/USD, AUD/USD; BUY USD/JPY, USD/CHF, USD/CAD.
 - Higher non-US inflation/employment → that currency stronger → BUY its XXX/USD pair; SELL its USD/XXX pair.
 - Higher US jobless claims/unemployment → USD weaker → BUY XXX/USD; SELL USD/XXX.
+- For crosses, the event currency decides the leg: GBP/JPY follows GBP news directly and JPY news inversely; EUR/JPY follows EUR directly and JPY inversely. A USD event is treated as risk-on/off.
 - If Forecast equals Previous, the board borrows the nearest same-currency medium/high event within 6 hours; otherwise it shows **WAIT** with straddle levels.
 
-Event cards also show the pre-news market bias for affected forex majors, and the card's signal badge changes from WAIT to BUY/SELL. This is an execution scenario, not a guarantee: wait for the release if the forecast edge is flat.
+The **Nasdaq 100 & S&P 500** board (`NAS100`, `US500`) follows the same USD catalyst: BUY means risk-on/stronger index, SELL means risk-off/weaker index. Risk template is NAS100 1%/2% and US500 0.75%/1.5%. Prices come from Yahoo Finance via `data/indices.json` (refreshed by GitHub Actions), with a live CORS-proxy fallback in the browser.
+
+Event cards also show the pre-news market bias for affected forex majors, crosses and indices, and the card's signal badge changes from WAIT to BUY/SELL. This is an execution scenario, not a guarantee: wait for the release if the forecast edge is flat.
 
 ## Auto order grid (forex major)
 

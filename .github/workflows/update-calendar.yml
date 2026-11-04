@@ -28,7 +28,7 @@ jobs:
         with:
           node-version: 22
 
-      - name: Fetch live calendar and gold price
+      - name: Fetch live calendar, gold, forex, crypto and indices
         run: node scripts/fetch-calendar.mjs
         env:
           GOLD_API_KEY: ${{ secrets.GOLD_API_KEY }}
@@ -38,7 +38,7 @@ jobs:
       - name: Check if data changed
         id: check_diff
         run: |
-          git add data/calendar.json data/market.json data/prenews.json
+          git add data/calendar.json data/market.json data/prenews.json data/indices.json
           if git diff --cached --quiet; then
             echo "Data tidak ada perubahan. Melewati proses commit."
             echo "changed=false" >> $GITHUB_OUTPUT

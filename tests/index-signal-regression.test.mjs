@@ -51,6 +51,7 @@ const newsPhaseFn = extractFunction('newsPhase');
 const momentumForFn = extractFunction('momentumFor');
 const postNewsMomentumFn = extractFunction('postNewsMomentum');
 const eventAssetsFn = extractFunction('eventAssets');
+const pairCurrenciesFn = extractFunction('pairCurrencies');
 const focusPairFn = extractFunction('focusPair');
 const normalizeSnapshotFn = extractFunction('normalizeSnapshot');
 const preNewsSnapshotFn = extractFunction('preNewsSnapshot');
@@ -60,14 +61,22 @@ const dateEventKeyFn = extractFunction('dateEventKey');
 const postNewsExpiryFn = extractFunction('postNewsExpiry');
 const forecastBiasFn = extractFunction('forecastBias');
 const preNewsBiasFn = extractFunction('preNewsBias');
+const invertDirFn = extractFunction('invertDir');
 const mapPairBiasFn = extractFunction('mapPairBias');
+const indexRateFn = extractFunction('indexRate');
 
-function buildTpSl(livePrice, forexRates, cryptoRates, store, preNews = {}) {
+function buildTpSl(livePrice, forexRates, cryptoRates, store, preNews = {}, indexRates = defaultIndexRates) {
   const body = `
     const WITA = 'Asia/Makassar';
     const POST_NEWS_HOLD_MS = 6 * 60 * 60 * 1000;
     const NEWS_SETTLE_MS = 60 * 1000;
-    const FOREX_PAIRS = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CHF', 'AUD/USD', 'USD/CAD'];
+    const FOREX_MAJORS = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CHF', 'AUD/USD', 'USD/CAD'];
+    const FOREX_CROSSES = ['GBP/JPY', 'EUR/JPY'];
+    const FOREX_PAIRS = [...FOREX_MAJORS, ...FOREX_CROSSES];
+    const INDICES = [
+      { symbol: 'NAS100', name: 'Nasdaq 100', yahoo: '^NDX', slPct: 1.0, tpPct: 2.0 },
+      { symbol: 'US500', name: 'S&P 500', yahoo: '^GSPC', slPct: 0.75, tpPct: 1.5 }
+    ];
     const fmtDate = d => new Intl.DateTimeFormat('en-IN', { timeZone: WITA, weekday: 'short', day: '2-digit', month: 'short' }).format(d);
     const fmtTime = d => new Intl.DateTimeFormat('en-IN', { timeZone: WITA, hour: '2-digit', minute: '2-digit', hour12: false }).format(d) + ' WITA';
     const esc = s => String(s ?? '');
@@ -82,22 +91,29 @@ function buildTpSl(livePrice, forexRates, cryptoRates, store, preNews = {}) {
     ${newsPhaseFn}
     ${pairRateFromFn}
     ${pairRateFn}
+    ${indexRateFn}
     ${momentumForFn}
     ${postNewsMomentumFn}
+    ${pairCurrenciesFn}
     ${eventAssetsFn}
     ${focusPairFn}
     ${postNewsExpiryFn}
     ${forecastBiasFn}
     ${preNewsBiasFn}
+    ${invertDirFn}
     ${mapPairBiasFn}
     ${tpSlFn}
     return tpSl;
   `;
-  return new Function('LIVE_PRICE', 'FOREX_RATES', 'CRYPTO_RATES', 'localStorage', 'PRE_NEWS', body)(livePrice, forexRates, cryptoRates, store, preNews);
+  return new Function('LIVE_PRICE', 'FOREX_RATES', 'CRYPTO_RATES', 'localStorage', 'PRE_NEWS', 'INDEX_RATES', body)(livePrice, forexRates, cryptoRates, store, preNews, indexRates);
 }
 
 const forexRates = { EUR: 0.92, GBP: 0.79, JPY: 150, CHF: 0.88, AUD: 0.65, CAD: 1.36 };
 const cryptoRates = { 'BTC/USD': 65000, 'ETH/USD': 3200 };
+const defaultIndexRates = {
+  NAS100: { price: 21000, previousClose: 20800, changePct: 0.96 },
+  US500: { price: 5800, previousClose: 5760, changePct: 0.69 }
+};
 const noStore = { getItem: () => null, setItem: () => {} };
 const jsonStore = value => ({ getItem: () => JSON.stringify(value), setItem: () => {} });
 const baseSnapshot = {
@@ -200,12 +216,25 @@ assert.match(usdPre, /pre-news market/);
 // Crypto still waits for post-news momentum; gold keeps its pre-news straddle.
 assert.match(usdPre, /BTC\/USD <b style="color:var\(--amber\)">STRADDLE<\/b>/);
 assert.match(usdPre, /STRATEGI STRADDLE \(OCO\)/);
+// USD event also drives the index panel.
+assert.match(usdPre, /Indices \(Nasdaq 100 &amp; S&amp;P 500\)/);
+assert.match(usdPre, /NAS100 <b>SELL<\/b>/);
+assert.match(usdPre, /US500 <b>SELL<\/b>/);
+assert.match(usdPre, /SL\/TP 1% \/ 2%/);
+assert.match(usdPre, /SL\/TP 0\.75% \/ 1\.5%/);
 
 const futureGbp = { ...futureEurCpi, Event: 'CPI y/y', Country: 'GBP', Forecast: '3.0%', Previous: '3.2%' };
 const gbpPre = buildTpSl(4000, forexRates, cryptoRates, noStore)({ dir: 'wait', score: 40 }, futureGbp);
 assert.match(gbpPre, /GBP\/USD <b>SELL<\/b>/);
+assert.match(gbpPre, /GBP\/JPY <b>SELL<\/b>/);
 assert.match(gbpPre, /USD\/JPY <b style="color:var\(--amber\)">STRADDLE<\/b>/);
 assert.doesNotMatch(gbpPre, /EUR\/USD <b>BUY<\/b>/);
+
+// Cross pairs follow the event currency leg.
+assert.match(eurPre, /EUR\/JPY <b>BUY<\/b>/);
+assert.match(usdPre, /GBP\/JPY <b>SELL<\/b>/);
+assert.match(usdPre, /EUR\/JPY <b>SELL<\/b>/);
+assert.doesNotMatch(eurPre, /NAS100/);
 
 // Pure Forecast-vs-Previous bias and pair orientation mapping.
 const forecastBias = new Function(`${numFn}\n${countryFn}\n${biasFn}\n${forecastBiasFn}\nreturn forecastBias;`)();
@@ -214,11 +243,25 @@ assert.equal(forecastBias({ Event: 'CPI', Country: 'EUR', Forecast: '4.0%', Prev
 assert.equal(forecastBias({ Event: 'CPI', Country: 'USD', Forecast: '3.0%', Previous: '3.0%' }), null);
 assert.equal(forecastBias({ Event: 'CPI', Country: 'USD', Forecast: '', Previous: '3.0%' }), null);
 
-const mapPairBias = new Function(`${mapPairBiasFn}\nreturn mapPairBias;`)();
+const mapPairBias = new Function(`${countryFn}\n${invertDirFn}\n${mapPairBiasFn}\nreturn mapPairBias;`)();
 assert.equal(mapPairBias('EUR/USD', 'short'), 'short');
 assert.equal(mapPairBias('USD/JPY', 'short'), 'long');
 assert.equal(mapPairBias('USD/CAD', 'long'), 'short');
 assert.equal(mapPairBias('EUR/USD', 'wait'), null);
+// Currency-aware crosses: event currency on the base leg keeps direction, quote leg inverts.
+assert.equal(mapPairBias('GBP/JPY', 'long', 'GBP'), 'long');
+assert.equal(mapPairBias('GBP/JPY', 'long', 'JPY'), 'short');
+assert.equal(mapPairBias('EUR/JPY', 'short', 'EUR'), 'short');
+assert.equal(mapPairBias('EUR/JPY', 'short', 'JPY'), 'long');
+assert.equal(mapPairBias('GBP/JPY', 'long', 'USD'), 'long');
+assert.equal(mapPairBias('EUR/JPY', 'short', 'USD'), 'short');
+
+const pairRateFrom = new Function(`${pairRateFromFn}\nreturn pairRateFrom;`)();
+assert.ok(Math.abs(pairRateFrom(forexRates, 'EUR/USD') - 1 / 0.92) < 1e-9);
+assert.ok(Math.abs(pairRateFrom(forexRates, 'GBP/JPY') - 150 / 0.79) < 1e-9);
+assert.ok(Math.abs(pairRateFrom(forexRates, 'EUR/JPY') - 150 / 0.92) < 1e-9);
+assert.equal(pairRateFrom({}, 'GBP/JPY'), null);
+assert.equal(pairRateFrom(forexRates, 'BADPAIR'), null);
 
 const liveHtml = buildTpSl(4000, forexRates, cryptoRates, noStore)({ dir: 'wait', score: 40 }, { ...pastUsd, Date: new Date(Date.now() - 30 * 1000).toISOString() });
 assert.match(liveHtml, /Rilis berlangsung/);
@@ -292,6 +335,105 @@ assert.match(fxBoardEmpty, /Menunggu data forex/);
 assert.doesNotMatch(fxBoardEmpty, /NaN|undefined/);
 
 console.log('Passed global forex board tests');
+
+// Global index board: Nasdaq 100 and S&P 500 driven by the USD catalyst.
+const indicesBoardStart = source.indexOf('id="indicesBoard"');
+assert.ok(indicesBoardStart > -1, 'indices board section missing');
+assert.ok(indicesBoardStart < calendarStart, 'indices board must render before the calendar');
+
+const indicesBoardFn = extractFunction('indicesBoardHtml');
+const indicesBoardHtml = new Function(`const esc = s => String(s ?? '');\n${indicesBoardFn}\nreturn indicesBoardHtml;`)();
+
+const idxBoard = indicesBoardHtml({
+  status: 'active', phase: 'pre', event: 'CPI · Kam 05 Nov 12:00 WITA', note: 'Forecast 3.2 vs Previous 3.0',
+  items: [
+    { symbol: 'NAS100', name: 'Nasdaq 100', slPct: 1.0, tpPct: 2.0, price: 28180.26, changePct: 0.68, dir: 'short', momPct: null },
+    { symbol: 'US500', name: 'S&P 500', slPct: 0.75, tpPct: 1.5, price: 7568.92, changePct: 0.36, dir: null, momPct: null }
+  ]
+});
+assert.match(idxBoard, /NAS100/);
+assert.match(idxBoard, /SELL · MARKET/);
+assert.match(idxBoard, /Entry 28,180\.26/);
+assert.match(idxBoard, /SL 28,462\.06/);
+assert.match(idxBoard, /TP 27,616\.65/);
+assert.match(idxBoard, /US500/);
+assert.match(idxBoard, /WAIT/);
+assert.match(idxBoard, /BUY &gt; 7,597\.30/);
+assert.match(idxBoard, /SELL &lt; 7,540\.54/);
+assert.match(idxBoard, /SL\/TP 1% \/ 2%/);
+assert.match(idxBoard, /SL\/TP 0\.75% \/ 1\.5%/);
+assert.doesNotMatch(idxBoard, /NaN|undefined/);
+
+const idxBoardNoPrice = indicesBoardHtml({ status: 'loading', items: [{ symbol: 'NAS100', name: 'Nasdaq 100', slPct: 1, tpPct: 2, price: null }] });
+assert.match(idxBoardNoPrice, /Menunggu harga index/);
+assert.doesNotMatch(idxBoardNoPrice, /NaN|undefined/);
+
+const idxStateFn = extractFunction('indicesBoardState');
+const nextUsdCatalystFn = extractFunction('nextUsdCatalyst');
+function buildIndicesState(evts, idxRates, now, analyzeBody = "() => ({ dir: 'wait' })", preBiasBody = '() => null', momentumBody = '() => null') {
+  const body = `
+    const WITA = 'Asia/Makassar';
+    const NEWS_SETTLE_MS = 60 * 1000;
+    const POST_NEWS_HOLD_MS = 6 * 60 * 60 * 1000;
+    const INDICES = [
+      { symbol: 'NAS100', name: 'Nasdaq 100', yahoo: '^NDX', slPct: 1.0, tpPct: 2.0 },
+      { symbol: 'US500', name: 'S&P 500', yahoo: '^GSPC', slPct: 0.75, tpPct: 1.5 }
+    ];
+    const countryCode = c => String(c || 'USD').toUpperCase();
+    const fmtDate = () => 'Kam 29 Okt';
+    const fmtTime = () => '02:00 WITA';
+    const postNewsExpiry = e => new Date(new Date(e.Date).getTime() + POST_NEWS_HOLD_MS);
+    const newsPhase = e => {
+      const t = new Date(e.Date).getTime();
+      if (!Number.isFinite(t) || Date.now() < t) return 'pre';
+      if (Date.now() < t + NEWS_SETTLE_MS) return 'live';
+      return 'post';
+    };
+    const analyze = ${analyzeBody};
+    const preNewsBias = ${preBiasBody};
+    const momentumFor = ${momentumBody};
+    ${nextUsdCatalystFn}
+    ${idxStateFn}
+    return indicesBoardState;
+  `;
+  return new Function('events', 'INDEX_RATES', body)(evts, idxRates)(now);
+}
+
+const idxRates = {
+  NAS100: { price: 21000, previousClose: 20800, changePct: 0.96 },
+  US500: { price: 5800, previousClose: 5760, changePct: 0.69 }
+};
+const idxNow = Date.now();
+const idxFutureUsd = { Date: new Date(idxNow + 60 * 60 * 1000).toISOString(), Event: 'CPI', Country: 'USD', Importance: 3, Forecast: '3.2%', Previous: '3.0%' };
+const idxPastUsd = { ...idxFutureUsd, Date: new Date(idxNow - 60 * 60 * 1000).toISOString() };
+
+const idxPreState = buildIndicesState([idxFutureUsd], idxRates, idxNow, "() => ({ dir: 'wait' })", "() => ({ dir: 'short', forecast: 3.2, previous: 3.0 })");
+assert.equal(idxPreState.status, 'active');
+assert.equal(idxPreState.phase, 'pre');
+assert.deepEqual(idxPreState.items.map(x => x.dir), ['short', 'short']);
+assert.ok(/Forecast 3\.2 vs Previous 3/.test(idxPreState.note));
+
+const idxWaitState = buildIndicesState([idxFutureUsd], idxRates, idxNow);
+assert.deepEqual(idxWaitState.items.map(x => x.dir), [null, null]);
+
+const idxPostDirected = buildIndicesState([idxPastUsd], idxRates, idxNow, "() => ({ dir: 'long' })");
+assert.deepEqual(idxPostDirected.items.map(x => x.dir), ['long', 'long']);
+
+const idxPostMomentum = buildIndicesState([idxPastUsd], idxRates, idxNow, "() => ({ dir: 'wait' })", '() => null', "(e, kind, symbol) => symbol === 'NAS100' ? { dir: 'long', changePct: 0.42 } : { dir: 'short', changePct: -0.21 }");
+assert.deepEqual(idxPostMomentum.items.map(x => x.dir), ['long', 'short']);
+assert.equal(idxPostMomentum.items[0].momPct, 0.42);
+assert.equal(idxPostMomentum.items[1].momPct, -0.21);
+
+const idxIdle = buildIndicesState([{ ...idxFutureUsd, Country: 'EUR' }], idxRates, idxNow);
+assert.equal(idxIdle.status, 'idle');
+
+const idxLive = buildIndicesState([{ ...idxPastUsd, Date: new Date(idxNow - 30 * 1000).toISOString() }], idxRates, idxNow);
+assert.equal(idxLive.status, 'live');
+
+const idxNoPrice = buildIndicesState([idxFutureUsd], {}, idxNow);
+assert.ok(idxNoPrice.items.every(x => !Number.isFinite(x.price)));
+
+console.log('Passed global index board tests');
 
 // Global gold board: always visible outside event cards.
 const goldStart = source.indexOf('id="goldBoard"');
